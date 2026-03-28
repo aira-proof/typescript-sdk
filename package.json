@@ -1,0 +1,39 @@
+{
+  "name": "aira-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Aira — legal infrastructure for AI agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "license": "MIT",
+  "author": "Aira <sdk@airaproof.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aira-proof/typescript-sdk"
+  },
+  "homepage": "https://airaproof.com",
+  "keywords": [
+    "aira",
+    "ai",
+    "agents",
+    "notarization",
+    "compliance",
+    "eu-ai-act",
+    "cryptographic-receipts"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
