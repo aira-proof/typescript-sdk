@@ -1,6 +1,6 @@
 {
   "name": "aira-sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "TypeScript SDK for Aira — legal infrastructure for AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
