@@ -147,9 +147,15 @@ await aira.escrowRelease(account.id, 15000, "Loan disbursed successfully");
 ## Chat
 
 ```typescript
-const response = await aira.ask("How many loan decisions were notarized this week?");
+const response = await aira.ask("How many loan decisions were notarized this week?", {
+  model: "claude-sonnet-4-6",
+});
 console.log(response.content);
 ```
+
+The `model` parameter is optional. If omitted, the organization's default chat model is used.
+
+> A default chat model must be configured in your dashboard (Settings → Models) before using `ask()` without an explicit model.
 
 ## Public Verification
 
