@@ -1,0 +1,13 @@
+{
+  "name": "aira-lending-agent-example",
+  "private": true,
+  "scripts": {
+    "start": "npx tsx index.ts"
+  },
+  "dependencies": {
+    "aira-sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}
