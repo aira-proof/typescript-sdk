@@ -4,6 +4,18 @@
 
 Aira provides the accountability layer that autonomous AI agents need to operate in regulated environments. Every action is notarized with Ed25519 signatures and RFC 3161 timestamps — producing court-admissible proof that an action happened, who authorized it, and what decision was made.
 
+**What you get:**
+- **Notarize actions** — cryptographic receipts for every agent decision, email, transaction
+- **Register agents** — verifiable identity with versioned configs and public profiles
+- **Multi-model consensus** — run the same decision through multiple AI models, flag disagreements
+- **Evidence packages** — sealed, tamper-proof bundles for legal discovery and audit
+- **Agent lifecycle** — wills, succession plans, death certificates, compliance snapshots
+- **Liability commitments** — record accountability commitments with cryptographic proof
+- **Human authorization** — require human co-signatures on high-stakes actions
+- **Public verification** — anyone can verify a receipt without an account
+
+Built for EU AI Act, SR 11-7, and GDPR compliance. Self-hostable. Open-source SDK.
+
 [![npm version](https://img.shields.io/npm/v/aira-sdk.svg)](https://www.npmjs.com/package/aira-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
