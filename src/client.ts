@@ -3,6 +3,8 @@ import {
   EvidencePackage, ComplianceSnapshot, EscrowAccount, EscrowTransaction,
   VerifyResult, PaginatedList, AiraError,
 } from "./types";
+import { OfflineQueue, type QueuedRequest } from "./offline";
+import { AiraSession } from "./session";
 
 const DEFAULT_BASE_URL = "https://api.airaproof.com";
 const DEFAULT_TIMEOUT = 30_000;
@@ -20,12 +22,14 @@ export interface AiraOptions {
   apiKey: string;
   baseUrl?: string;
   timeout?: number;
+  offline?: boolean;
 }
 
 export class Aira {
   private baseUrl: string;
   private apiKey: string;
   private timeout: number;
+  private queue: OfflineQueue | null;
 
   constructor(options: AiraOptions) {
     if (!options.apiKey) throw new Error("apiKey is required");
@@ -35,6 +39,7 @@ export class Aira {
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, "") + "/api/v1";
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT;
+    this.queue = options.offline ? new OfflineQueue() : null;
   }
 
   private async request<T = Record<string, unknown>>(
@@ -69,6 +74,9 @@ export class Aira {
   }
 
   private get<T = Record<string, unknown>>(path: string, params?: Record<string, unknown>, auth = true): Promise<T> {
+    if (this.queue) {
+      throw new AiraError(0, "OFFLINE", "GET requests not available in offline mode");
+    }
     const qs = params ? "?" + new URLSearchParams(
       Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])
     ).toString() : "";
@@ -76,6 +84,10 @@ export class Aira {
   }
 
   private post<T = Record<string, unknown>>(path: string, body: Record<string, unknown>): Promise<T> {
+    if (this.queue) {
+      const qid = this.queue.enqueue("POST", path, body);
+      return Promise.resolve({ _offline: true, _queue_id: qid } as unknown as T);
+    }
     return this.request<T>("POST", path, body);
   }
 
@@ -346,5 +358,31 @@ export class Aira {
 
   async ask(message: string, params?: { history?: Record<string, unknown>[]; model?: string }): Promise<{ content: string; tools_used: string[]; model_id?: string }> {
     return this.post("/chat", buildBody({ message, history: params?.history, model: params?.model }));
+  }
+
+  // ==================== Session ====================
+
+  /** Create a scoped session with pre-filled defaults. */
+  session(agentId: string, defaults?: Record<string, unknown>): AiraSession {
+    return new AiraSession(this, agentId, defaults);
+  }
+
+  // ==================== Offline sync ====================
+
+  /** Number of queued offline requests. */
+  get pendingCount(): number {
+    return this.queue?.pendingCount ?? 0;
+  }
+
+  /** Flush offline queue to API. Returns list of API responses. */
+  async sync(): Promise<Record<string, unknown>[]> {
+    if (!this.queue) throw new Error("sync() is only available in offline mode");
+    const items = this.queue.drain();
+    const results: Record<string, unknown>[] = [];
+    for (const item of items) {
+      const res = await this.request<Record<string, unknown>>(item.method, item.path, item.body);
+      results.push(res);
+    }
+    return results;
   }
 }

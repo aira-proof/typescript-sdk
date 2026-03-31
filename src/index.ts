@@ -1,5 +1,8 @@
 export { Aira } from "./client";
 export type { AiraOptions } from "./client";
+export { AiraSession } from "./session";
+export { OfflineQueue } from "./offline";
+export type { QueuedRequest } from "./offline";
 export {
   AiraError,
   type ActionReceipt,

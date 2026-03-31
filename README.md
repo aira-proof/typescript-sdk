@@ -1,170 +1,249 @@
 # Aira TypeScript SDK
 
-**Legal infrastructure for AI agents.** Cryptographic proof for every action your AI agent takes.
-
-Aira provides the accountability layer that autonomous AI agents need to operate in regulated environments. Every action is notarized with Ed25519 signatures and RFC 3161 timestamps — producing court-admissible proof that an action happened, who authorized it, and what decision was made.
-
-**What you get:**
-- **Notarize actions** — cryptographic receipts for every agent decision, email, transaction
-- **Register agents** — verifiable identity with versioned configs and public profiles
-- **Multi-model consensus** — run the same decision through multiple AI models, flag disagreements
-- **Evidence packages** — sealed, tamper-proof bundles for legal discovery and audit
-- **Agent lifecycle** — wills, succession plans, death certificates, compliance snapshots
-- **Liability commitments** — record accountability commitments with cryptographic proof
-- **Human authorization** — require human co-signatures on high-stakes actions
-- **Public verification** — anyone can verify a receipt without an account
-
-Built for EU AI Act, SR 11-7, and GDPR compliance. Self-hostable. Open-source SDK.
+**Legal infrastructure for AI agents.**
 
 [![npm version](https://img.shields.io/npm/v/aira-sdk.svg)](https://www.npmjs.com/package/aira-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+
+Aira produces cryptographic receipts for every action your AI agent takes. Ed25519 signatures and RFC 3161 timestamps create tamper-proof, court-admissible proof of what happened, who authorized it, and which model made the decision. Built for EU AI Act, SR 11-7, and GDPR compliance.
+
+---
+
+## Integration Matrix
+
+Drop Aira into your existing agent framework with one import:
+
+| Framework | Import | Integration |
+|---|---|---|
+| **LangChain.js** | `import { AiraCallbackHandler } from "aira-sdk/extras/langchain"` | Callback handler |
+| **Vercel AI** | `import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai"` | Middleware |
+| **OpenAI Agents** | `import { AiraGuardrail } from "aira-sdk/extras/openai-agents"` | Guardrail |
+| **MCP** | `import { createServer } from "aira-sdk/extras/mcp"` | MCP Server |
+| **Webhooks** | `import { verifySignature } from "aira-sdk/extras/webhooks"` | Verification |
+
+Or install the core SDK alone:
 
 ```bash
 npm install aira-sdk
 ```
 
+---
+
 ## Quick Start
+
+Every call to `notarize()` returns a cryptographic receipt -- Ed25519-signed, timestamped, tamper-proof.
 
 ```typescript
 import { Aira } from "aira-sdk";
 
 const aira = new Aira({ apiKey: "aira_live_xxx" });
 
-// Notarize an agent action
 const receipt = await aira.notarize({
   actionType: "email_sent",
   details: "Sent onboarding email to customer@example.com",
   agentId: "support-agent",
   modelId: "claude-sonnet-4-6",
+  instructionHash: "sha256:a1b2c3...",
 });
 
-console.log(receipt.signature);  // ed25519:base64url...
-console.log(receipt.action_id);  // uuid
+console.log(receipt.payload_hash);   // sha256:e5f6a7b8...
+console.log(receipt.signature);       // ed25519:base64url...
+console.log(receipt.action_id);       // uuid — publicly verifiable
 ```
 
-## Agent Registry
+---
+
+## Framework Integrations
+
+### LangChain.js
+
+`AiraCallbackHandler` notarizes every tool call, chain completion, and LLM invocation with a cryptographic receipt. No changes to your chain logic.
 
 ```typescript
-const agent = await aira.registerAgent({
-  agentSlug: "lending-agent",
-  displayName: "Loan Decision Engine",
-  capabilities: ["credit_scoring", "risk_assessment"],
-  public: true,
-});
+import { Aira } from "aira-sdk";
+import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
 
-await aira.publishVersion("lending-agent", {
-  version: "1.0.0",
-  modelId: "claude-sonnet-4-6",
-  changelog: "Initial release",
-});
+const aira = new Aira({ apiKey: "aira_live_xxx" });
+const handler = new AiraCallbackHandler({ client: aira, agentId: "research-agent", modelId: "gpt-4o" });
 
-const agents = await aira.listAgents();
-console.log(agents.total);  // 5
+// Every tool call and chain completion gets a signed receipt
+const result = await chain.invoke({ input: "Analyze Q1 revenue" }, { callbacks: [handler] });
 ```
 
-## Action Notarization
+### Vercel AI
+
+`AiraVercelMiddleware` wraps your Vercel AI `streamText` / `generateText` calls so every model invocation is notarized with a tamper-proof receipt.
 
 ```typescript
-// Notarize with chain of custody
-const decision = await aira.notarize({
-  actionType: "loan_approved",
-  details: "Approved loan #4521 for €25,000",
-  agentId: "lending-agent",
-  modelId: "claude-sonnet-4-6",
-  idempotencyKey: "loan-4521",
-});
+import { Aira } from "aira-sdk";
+import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai";
 
-// Chain a follow-up action
-const email = await aira.notarize({
-  actionType: "email_sent",
-  details: "Sent approval notification",
-  agentId: "lending-agent",
-  parentActionId: decision.action_id,
-});
+const aira = new Aira({ apiKey: "aira_live_xxx" });
+const middleware = new AiraVercelMiddleware({ client: aira, agentId: "assistant-agent" });
 
-// Get chain of custody
-const chain = await aira.getActionChain(decision.action_id);
-
-// Human co-signature
-await aira.authorizeAction(decision.action_id);
-
-// Legal hold
-await aira.setLegalHold(decision.action_id);
-```
-
-## Multi-Model Consensus
-
-```typescript
-const result = await aira.runCase(
-  "Should we approve loan #4521?",
-  ["claude-sonnet-4-6", "gpt-4o", "gemini-2.0-flash"],
-);
-
-console.log(result.consensus.decision);     // "APPROVE"
-console.log(result.consensus.confidence);   // 0.92
-```
-
-## Evidence Packages
-
-```typescript
-const pkg = await aira.createEvidencePackage({
-  title: "Q1 2026 Lending Audit",
-  actionIds: [decision.action_id, email.action_id],
-  description: "All lending decisions for regulatory review",
-});
-
-console.log(pkg.package_hash);  // sha256:...
-console.log(pkg.signature);    // ed25519:...
-```
-
-## Agent Will & Estate
-
-```typescript
-await aira.setAgentWill("lending-agent", {
-  successorSlug: "lending-agent-v2",
-  successionPolicy: "transfer_to_successor",
-  dataRetentionDays: 2555,
-  notifyEmails: ["compliance@acme.com"],
-});
-
-await aira.createComplianceSnapshot({
-  framework: "eu-ai-act",
-  agentSlug: "lending-agent",
-  findings: { art_12_logging: "pass", art_14_oversight: "pass" },
+// Wrap your Vercel AI calls — receipts at invocation and completion
+const result = await middleware.wrapGenerateText({
+  model: openai("gpt-4o"),
+  prompt: "Summarize the contract terms",
 });
 ```
 
-## Escrow (Liability Commitments)
+### OpenAI Agents SDK
 
-Escrow accounts are **accountability ledgers** — they record liability commitments with cryptographic proof. No real funds are custodied by Aira.
+`AiraGuardrail` wraps any tool function to automatically notarize both invocation and result with cryptographic proof.
 
 ```typescript
-const account = await aira.createEscrowAccount({ purpose: "Loan liability" });
-await aira.escrowDeposit(account.id, 15000, "Liability commitment for loan #4521");
-await aira.escrowRelease(account.id, 15000, "Loan disbursed successfully");
+import { Aira } from "aira-sdk";
+import { AiraGuardrail } from "aira-sdk/extras/openai-agents";
+
+const aira = new Aira({ apiKey: "aira_live_xxx" });
+const guardrail = new AiraGuardrail({ client: aira, agentId: "assistant-agent" });
+
+// Wrap tools — every call and result gets a signed receipt
+const search = guardrail.wrapTool(searchTool, { toolName: "web_search" });
+const execute = guardrail.wrapTool(codeExecutor, { toolName: "code_exec" });
 ```
 
-## Chat
+---
+
+## MCP Server
+
+Expose Aira as an MCP tool server. Any MCP-compatible AI agent can notarize actions and verify receipts without SDK integration.
 
 ```typescript
-const response = await aira.ask("How many loan decisions were notarized this week?", {
-  model: "claude-sonnet-4-6",
+import { createServer } from "aira-sdk/extras/mcp";
+
+const server = createServer({ apiKey: "aira_live_xxx" });
+server.listen(); // stdio transport
+```
+
+The server exposes three tools: `notarize_action`, `verify_action`, and `get_receipt` -- each producing cryptographically signed results.
+
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "aira": {
+      "command": "npx",
+      "args": ["aira-sdk", "mcp"],
+      "env": { "AIRA_API_KEY": "aira_live_xxx" }
+    }
+  }
+}
+```
+
+---
+
+## Session
+
+Pre-fill defaults for a block of related actions. Every `notarize()` call within the session inherits the agent identity, producing receipts that share a common provenance chain.
+
+```typescript
+const sess = aira.session("onboarding-agent", { modelId: "claude-sonnet-4-6" });
+
+await sess.notarize({ actionType: "identity_verified", details: "Verified customer ID #4521" });
+await sess.notarize({ actionType: "account_created", details: "Created account for customer #4521" });
+await sess.notarize({ actionType: "welcome_sent", details: "Sent welcome email to customer #4521" });
+```
+
+---
+
+## Offline Mode
+
+Queue notarizations locally when connectivity is unavailable. Cryptographic receipts are generated server-side when you sync -- nothing is lost.
+
+```typescript
+const aira = new Aira({ apiKey: "aira_live_xxx", offline: true });
+
+// These queue locally — no network calls
+await aira.notarize({ actionType: "scan_completed", details: "Scanned document batch #77" });
+await aira.notarize({ actionType: "classification_done", details: "Classified 142 documents" });
+
+console.log(aira.pendingCount);  // 2
+
+// Flush to API when back online — receipts are generated for each action
+const results = await aira.sync();
+```
+
+---
+
+## Webhook Verification
+
+Verify that incoming webhooks are authentic Aira events, not forged requests. HMAC-SHA256 signature verification ensures tamper-proof delivery.
+
+```typescript
+import { verifySignature, parseEvent } from "aira-sdk/extras/webhooks";
+
+// Verify the webhook signature (HMAC-SHA256)
+const isValid = verifySignature({
+  payload: request.body,
+  signature: request.headers["x-aira-signature"],
+  secret: "whsec_xxx",
 });
-console.log(response.content);
+
+if (isValid) {
+  const event = parseEvent(request.body);
+  console.log(event.eventType);    // "action.notarized"
+  console.log(event.data);         // Action data with cryptographic receipt
+  console.log(event.deliveryId);   // Unique delivery ID
+}
 ```
 
-The `model` parameter is optional. If omitted, the organization's default chat model is used.
+Supported event types: `action.notarized`, `action.authorized`, `agent.registered`, `agent.decommissioned`, `evidence.sealed`, `escrow.deposited`, `escrow.released`, `escrow.disputed`, `compliance.snapshot_created`, `case.complete`, `case.requires_human_review`.
 
-> A default chat model must be configured in your dashboard (Settings → Models) before using `ask()` without an explicit model.
+---
 
-## Public Verification
+## Core SDK Methods
 
-```typescript
-// No auth needed — anyone can verify
-const result = await aira.verifyAction("action-uuid");
-console.log(result.valid);    // true
-console.log(result.message);  // "Action receipt exists..."
-```
+All 40 methods on `Aira`. Every write operation produces a cryptographic receipt.
+
+| Category | Method | Description |
+|---|---|---|
+| **Actions** | `notarize()` | Notarize an action -- returns Ed25519-signed receipt |
+| | `getAction()` | Retrieve action details + receipt |
+| | `listActions()` | List actions with filters (type, agent, status) |
+| | `authorizeAction()` | Human co-signature on high-stakes action |
+| | `setLegalHold()` | Prevent deletion -- litigation hold |
+| | `releaseLegalHold()` | Release litigation hold |
+| | `getActionChain()` | Chain of custody for an action |
+| | `verifyAction()` | Public verification -- no auth required |
+| **Agents** | `registerAgent()` | Register verifiable agent identity |
+| | `getAgent()` | Retrieve agent profile |
+| | `listAgents()` | List registered agents |
+| | `updateAgent()` | Update agent metadata |
+| | `publishVersion()` | Publish versioned agent config |
+| | `listVersions()` | List agent versions |
+| | `decommissionAgent()` | Decommission agent |
+| | `transferAgent()` | Transfer ownership to another org |
+| | `getAgentActions()` | List actions by agent |
+| **Cases** | `runCase()` | Multi-model consensus adjudication |
+| | `getCase()` | Retrieve case result |
+| | `listCases()` | List cases |
+| **Receipts** | `getReceipt()` | Retrieve cryptographic receipt |
+| | `exportReceipt()` | Export receipt as JSON or PDF |
+| **Evidence** | `createEvidencePackage()` | Sealed, tamper-proof evidence bundle |
+| | `listEvidencePackages()` | List evidence packages |
+| | `getEvidencePackage()` | Retrieve evidence package |
+| | `timeTravel()` | Query actions at a point in time |
+| | `liabilityChain()` | Walk full liability chain |
+| **Estate** | `setAgentWill()` | Define succession plan |
+| | `getAgentWill()` | Retrieve agent will |
+| | `issueDeathCertificate()` | Decommission with succession trigger |
+| | `getDeathCertificate()` | Retrieve death certificate |
+| | `createComplianceSnapshot()` | Compliance snapshot (EU AI Act, SR 11-7, GDPR) |
+| | `listComplianceSnapshots()` | List snapshots by framework |
+| **Escrow** | `createEscrowAccount()` | Create liability commitment ledger |
+| | `listEscrowAccounts()` | List escrow accounts |
+| | `getEscrowAccount()` | Retrieve escrow account |
+| | `escrowDeposit()` | Record liability commitment |
+| | `escrowRelease()` | Release commitment after completion |
+| | `escrowDispute()` | Dispute -- flag liability issue |
+| **Chat** | `ask()` | Query your notarized data via AI |
+| **Offline** | `sync()` | Flush offline queue to API |
+| **Session** | `session()` | Scoped session with pre-filled defaults |
+
+---
 
 ## Error Handling
 
@@ -182,27 +261,53 @@ try {
 }
 ```
 
+All framework integrations (LangChain.js, Vercel AI, OpenAI Agents) are non-blocking by default -- notarization failures are logged, never raised. Your agent keeps running.
+
+---
+
 ## Configuration
 
 ```typescript
 const aira = new Aira({
-  apiKey: "aira_live_xxx",
-  baseUrl: "https://your-self-hosted.com",  // Self-hosted
-  timeout: 60_000,                           // Request timeout in ms
+  apiKey: "aira_live_xxx",                      // Required — aira_live_ or aira_test_ prefix
+  baseUrl: "https://your-self-hosted.com",      // Self-hosted deployment
+  timeout: 60_000,                              // Request timeout in ms
+  offline: true,                                // Queue locally, sync later
 });
 ```
 
-## License
+| Env Variable | Description |
+|---|---|
+| `AIRA_API_KEY` | API key (used by MCP server) |
 
-MIT
+---
+
+## SDK Parity
+
+| Feature | Python | TypeScript |
+|---|---|---|
+| Core API (40 methods) | Yes | Yes |
+| LangChain | Yes | Yes |
+| CrewAI | Yes | -- (Python-only) |
+| Vercel AI | -- (JS-only) | Yes |
+| OpenAI Agents | Yes | Yes |
+| Google ADK | Yes (Python-only) | -- |
+| AWS Bedrock | Yes (Python-only) | -- |
+| MCP Server | Yes | Yes |
+| Webhooks | Yes | Yes |
+| CLI | Yes | -- (use Python CLI) |
+| Offline Mode | Yes | Yes |
+| Session | Yes | Yes |
+
+---
 
 ## Links
 
 - [Website](https://airaproof.com)
 - [npm Package](https://www.npmjs.com/package/aira-sdk)
-- [Interactive Demo](https://app.airaproof.com/demo) — try Aira in your browser, no code needed
+- [Python SDK (PyPI)](https://pypi.org/project/aira-sdk/)
 - [Documentation](https://docs.airaproof.com)
 - [API Reference](https://docs.airaproof.com/docs/api-reference)
-- [Python SDK](https://pypi.org/project/aira-sdk/)
+- [Interactive Demo](https://app.airaproof.com/demo) -- try Aira in your browser, no code needed
 - [Dashboard](https://app.airaproof.com)
 - [GitHub](https://github.com/aira-proof/typescript-sdk)
