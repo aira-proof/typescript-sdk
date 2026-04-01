@@ -196,7 +196,7 @@ Supported event types: `action.notarized`, `action.authorized`, `agent.registere
 
 ## Core SDK Methods
 
-All 40 methods on `Aira`. Every write operation produces a cryptographic receipt.
+All 56 methods on `Aira`. Every write operation produces a cryptographic receipt.
 
 | Category | Method | Description |
 |---|---|---|
@@ -217,6 +217,22 @@ All 40 methods on `Aira`. Every write operation produces a cryptographic receipt
 | | `decommissionAgent()` | Decommission agent |
 | | `transferAgent()` | Transfer ownership to another org |
 | | `getAgentActions()` | List actions by agent |
+| **Trust Layer** | `getAgentDid()` | Retrieve agent's W3C DID (`did:web`) |
+| | `rotateAgentKeys()` | Rotate agent's Ed25519 signing keys |
+| | `getAgentCredential()` | Get agent's W3C Verifiable Credential |
+| | `verifyCredential()` | Verify a Verifiable Credential |
+| | `revokeCredential()` | Revoke agent's Verifiable Credential |
+| | `requestMutualSign()` | Initiate mutual notarization with counterparty |
+| | `completeMutualSign()` | Complete mutual notarization (counterparty signs) |
+| | `getMutualSignStatus()` | Check status of a mutual sign request |
+| | `getReputation()` | Get agent reputation score and tier |
+| | `listReputationHistory()` | List reputation score history |
+| | `setEndpointPolicy()` | Set endpoint verification policy |
+| | `getEndpointPolicy()` | Get current endpoint policy |
+| | `resolveDid()` | Resolve any DID to its DID Document |
+| | `checkTrust()` | Run full trust check against a counterparty |
+| | `listCredentials()` | List all credentials for an agent |
+| | `getTrustBundle()` | Get DID + VC + reputation in one call |
 | **Cases** | `runCase()` | Multi-model consensus adjudication |
 | | `getCase()` | Retrieve case result |
 | | `listCases()` | List cases |
@@ -242,6 +258,86 @@ All 40 methods on `Aira`. Every write operation produces a cryptographic receipt
 | **Chat** | `ask()` | Query your notarized data via AI |
 | **Offline** | `sync()` | Flush offline queue to API |
 | **Session** | `session()` | Scoped session with pre-filled defaults |
+
+---
+
+## Trust Layer
+
+Standards-based identity and trust for agents: W3C DIDs, Verifiable Credentials, mutual notarization, and reputation scoring. Every agent gets a cryptographically verifiable identity that other agents (and humans) can check before interacting.
+
+### DID Identity
+
+Every registered agent gets a W3C-compliant DID (`did:web`):
+
+```typescript
+// Retrieve the agent's DID
+const did = await aira.getAgentDid("my-agent");
+console.log(did);  // "did:web:airaproof.com:agents:my-agent"
+
+// Rotate signing keys (old keys are revoked, new keys are published)
+await aira.rotateAgentKeys("my-agent");
+```
+
+### Verifiable Credentials
+
+```typescript
+// Get the agent's W3C Verifiable Credential
+const vc = await aira.getAgentCredential("my-agent");
+
+// Verify any VC (returns validity, issuer, expiry)
+const result = await aira.verifyCredential(vc);
+console.log(result.valid);  // true
+
+// Revoke a credential
+await aira.revokeCredential("my-agent", { reason: "Agent deprecated" });
+```
+
+### Mutual Notarization
+
+For high-stakes actions, both parties co-sign:
+
+```typescript
+// Agent A initiates — sends a signing request to the counterparty
+const request = await aira.requestMutualSign({
+  actionId: "act-uuid",
+  counterpartyDid: "did:web:partner.com:agents:their-agent",
+});
+
+// Agent B completes — signs the same payload
+const receipt = await aira.completeMutualSign({
+  actionId: "act-uuid",
+  did: "did:web:partner.com:agents:their-agent",
+  signature: "z...",
+  signedPayloadHash: "sha256:...",
+});
+```
+
+### Reputation
+
+```typescript
+const rep = await aira.getReputation("my-agent");
+console.log(rep.score);  // 84
+console.log(rep.tier);   // "Verified"
+```
+
+### Trust Policy in Integrations
+
+Pass a `trustPolicy` to any framework integration to run automated trust checks before agent interactions:
+
+```typescript
+import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
+
+const handler = new AiraCallbackHandler(aira, "research-agent", {
+  modelId: "gpt-4o",
+  trustPolicy: {
+    verifyCounterparty: true,    // resolve counterparty DID
+    minReputation: 60,           // warn if reputation score below 60
+    requireValidVc: true,        // check Verifiable Credential validity
+    blockRevokedVc: true,        // block if counterparty VC is revoked
+    blockUnregistered: false,    // don't block agents without Aira DIDs
+  },
+});
+```
 
 ---
 
@@ -286,7 +382,8 @@ const aira = new Aira({
 
 | Feature | Python | TypeScript |
 |---|---|---|
-| Core API (40 methods) | Yes | Yes |
+| Core API (45+ methods) | Yes | Yes |
+| Trust Layer (DID, VC, Reputation) | Yes | Yes |
 | LangChain | Yes | Yes |
 | CrewAI | Yes | -- (Python-only) |
 | Vercel AI | -- (JS-only) | Yes |
