@@ -320,6 +320,67 @@ console.log(rep.score);  // 84
 console.log(rep.tier);   // "Verified"
 ```
 
+### Endpoint Verification
+
+Control which external APIs your agents can call. When `endpointUrl` is passed to `notarize()`, Aira checks it against your org's whitelist. Unrecognized endpoints are blocked in strict mode.
+
+#### Notarize with endpointUrl
+
+```typescript
+const receipt = await aira.notarize({
+  actionType: "api_call",
+  details: "Charged customer $49.99 for subscription renewal",
+  agentId: "billing-agent",
+  modelId: "claude-sonnet-4-6",
+  endpointUrl: "https://api.stripe.com/v1/charges",
+});
+```
+
+#### Handle ENDPOINT_NOT_WHITELISTED
+
+```typescript
+import { Aira, AiraError } from "aira-sdk";
+
+try {
+  const receipt = await aira.notarize({
+    actionType: "api_call",
+    details: "Send SMS via new provider",
+    agentId: "notifications-agent",
+    endpointUrl: "https://api.newprovider.com/v1/sms",
+  });
+} catch (e) {
+  if (e instanceof AiraError && e.code === "ENDPOINT_NOT_WHITELISTED") {
+    console.log(`Blocked: ${e.message}`);
+    console.log(`Approval request: ${e.details.approval_id}`);
+    console.log(`Suggested pattern: ${e.details.url_pattern_suggested}`);
+  } else {
+    throw e;
+  }
+}
+```
+
+#### Manage whitelist via API
+
+```typescript
+// List current whitelist
+const entries = await aira.listEndpointWhitelist();
+
+// Add a new endpoint pattern
+const entry = await aira.addEndpointWhitelist({
+  urlPattern: "https://api.twilio.com/*",
+  name: "Twilio API",
+});
+
+// List pending approval requests
+const approvals = await aira.listEndpointApprovals();
+
+// Approve a pending request (admin only)
+await aira.approveEndpoint({ approvalId: "eap_def456" });
+
+// Delete a whitelist entry (admin only)
+await aira.deleteEndpointWhitelist({ entryId: "ewl_abc123" });
+```
+
 ### Trust Policy in Integrations
 
 Pass a `trustPolicy` to any framework integration to run automated trust checks before agent interactions:
