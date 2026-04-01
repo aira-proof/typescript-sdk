@@ -2,10 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AiraCallbackHandler } from "../src/extras/langchain";
 
 const mockNotarize = vi.fn().mockResolvedValue({ action_id: "a1" });
-const mockClient = { notarize: mockNotarize } as any;
+const mockResolveDid = vi.fn().mockResolvedValue({ did: "did:web:airaproof.com:agents:partner" });
+const mockGetAgentCredential = vi.fn().mockResolvedValue({ type: "VerifiableCredential" });
+const mockVerifyCredential = vi.fn().mockResolvedValue({ valid: true });
+const mockGetReputation = vi.fn().mockResolvedValue({ score: 85, tier: "trusted" });
+const mockClient = {
+  notarize: mockNotarize,
+  resolveDid: mockResolveDid,
+  getAgentCredential: mockGetAgentCredential,
+  verifyCredential: mockVerifyCredential,
+  getReputation: mockGetReputation,
+} as any;
 
 beforeEach(() => {
   mockNotarize.mockClear();
+  mockResolveDid.mockClear();
+  mockGetAgentCredential.mockClear();
+  mockVerifyCredential.mockClear();
+  mockGetReputation.mockClear();
 });
 
 describe("AiraCallbackHandler", () => {
@@ -81,5 +95,74 @@ describe("AiraCallbackHandler", () => {
     expect(cbs.handleToolEnd).toBeTypeOf("function");
     expect(cbs.handleChainEnd).toBeTypeOf("function");
     expect(cbs.handleLLMEnd).toBeTypeOf("function");
+  });
+});
+
+describe("AiraCallbackHandler trust policy", () => {
+  it("returns no-policy context when trustPolicy is not set", async () => {
+    const handler = new AiraCallbackHandler(mockClient, "agent-1");
+    const ctx = await handler.checkTrust("partner");
+
+    expect(ctx.counterpartyId).toBe("partner");
+    expect(ctx.blocked).toBe(false);
+    expect(ctx.recommendation).toBe("No trust policy configured");
+  });
+
+  it("resolves DID and checks reputation with verifyCounterparty", async () => {
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
+      trustPolicy: { verifyCounterparty: true, minReputation: 50 },
+    });
+    const ctx = await handler.checkTrust("partner");
+
+    expect(ctx.didResolved).toBe(true);
+    expect(ctx.reputationScore).toBe(85);
+    expect(ctx.blocked).toBe(false);
+    expect(mockResolveDid).toHaveBeenCalledOnce();
+    expect(mockGetReputation).toHaveBeenCalledOnce();
+  });
+
+  it("warns when reputation is below minimum", async () => {
+    mockGetReputation.mockResolvedValueOnce({ score: 20, tier: "low" });
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
+      trustPolicy: { minReputation: 50 },
+    });
+    const ctx = await handler.checkTrust("partner");
+
+    expect(ctx.blocked).toBe(false);
+    expect(ctx.reputationWarning).toContain("below minimum");
+  });
+
+  it("blocks on revoked VC when blockRevokedVc is set", async () => {
+    mockVerifyCredential.mockResolvedValueOnce({ valid: false });
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
+      trustPolicy: { requireValidVc: true, blockRevokedVc: true },
+    });
+    const ctx = await handler.checkTrust("partner");
+
+    expect(ctx.blocked).toBe(true);
+    expect(ctx.blockReason).toContain("revoked or invalid");
+  });
+
+  it("blocks unregistered agent when blockUnregistered is set", async () => {
+    mockResolveDid.mockRejectedValueOnce(new Error("not found"));
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
+      trustPolicy: { verifyCounterparty: true, blockUnregistered: true },
+    });
+    const ctx = await handler.checkTrust("unknown-agent");
+
+    expect(ctx.blocked).toBe(true);
+    expect(ctx.blockReason).toContain("could not be resolved");
+  });
+
+  it("does not block on invalid VC without blockRevokedVc", async () => {
+    mockVerifyCredential.mockResolvedValueOnce({ valid: false });
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
+      trustPolicy: { requireValidVc: true },
+    });
+    const ctx = await handler.checkTrust("partner");
+
+    expect(ctx.blocked).toBe(false);
+    expect(ctx.vcValid).toBe(false);
+    expect(ctx.recommendation).toContain("proceed with caution");
   });
 });

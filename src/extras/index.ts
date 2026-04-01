@@ -18,3 +18,5 @@ export { createServer, getTools, handleToolCall } from "./mcp";
 export type { MCPTool, MCPTextContent } from "./mcp";
 export { verifySignature, parseEvent, WebhookEventType } from "./webhooks";
 export type { WebhookEvent, WebhookEventTypeName } from "./webhooks";
+export { checkTrust } from "./trust";
+export type { TrustPolicy, TrustContext } from "./trust";

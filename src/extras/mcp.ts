@@ -62,6 +62,51 @@ export function getTools(): MCPTool[] {
         required: ["receipt_id"],
       },
     },
+    {
+      name: "resolve_did",
+      description: "Resolve a did:web DID to its DID document",
+      inputSchema: {
+        type: "object",
+        properties: {
+          did: { type: "string", description: "The DID to resolve (e.g. did:web:airaproof.com:agents:my-agent)" },
+        },
+        required: ["did"],
+      },
+    },
+    {
+      name: "verify_credential",
+      description: "Verify a Verifiable Credential — checks signature, expiry, and revocation status",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agent_id: { type: "string", description: "Agent slug whose credential to verify" },
+        },
+        required: ["agent_id"],
+      },
+    },
+    {
+      name: "get_reputation",
+      description: "Get the current reputation score and tier for an agent",
+      inputSchema: {
+        type: "object",
+        properties: {
+          agent_id: { type: "string", description: "Agent slug" },
+        },
+        required: ["agent_id"],
+      },
+    },
+    {
+      name: "request_mutual_sign",
+      description: "Initiate a mutual signing request for an action with a counterparty",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action_id: { type: "string", description: "Action UUID to co-sign" },
+          counterparty_did: { type: "string", description: "DID of the counterparty agent" },
+        },
+        required: ["action_id", "counterparty_did"],
+      },
+    },
   ];
 }
 
@@ -89,6 +134,30 @@ export async function handleToolCall(
 
     if (name === "get_receipt") {
       const result = await client.getReceipt(args.receipt_id as string);
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "resolve_did") {
+      const result = await client.resolveDid(args.did as string);
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "verify_credential") {
+      const cred = await client.getAgentCredential(args.agent_id as string);
+      const result = await client.verifyCredential(cred);
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "get_reputation") {
+      const result = await client.getReputation(args.agent_id as string);
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "request_mutual_sign") {
+      const result = await client.requestMutualSign(
+        args.action_id as string,
+        args.counterparty_did as string,
+      );
       return [{ type: "text", text: JSON.stringify(result) }];
     }
 

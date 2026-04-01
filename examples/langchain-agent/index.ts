@@ -26,14 +26,40 @@ const aira = new Aira({ apiKey: AIRA_API_KEY });
 
 // Create a callback handler — every LangChain event it receives is
 // automatically notarized with a cryptographic receipt.
+// The trustPolicy enables automated trust checks before agent interactions.
 const handler = new AiraCallbackHandler(aira, "langchain-research-agent", {
   modelId: "gpt-4o",
+  trustPolicy: {
+    verifyCounterparty: true,    // Resolve DID before interacting
+    minReputation: 50,           // Warn if reputation < 50
+    requireValidVc: true,        // Check Verifiable Credential validity
+    blockRevokedVc: true,        // Hard-block agents with revoked credentials
+    blockUnregistered: false,    // Advisory only for unregistered agents
+  },
 });
 
 async function main() {
   console.log("\n" + "=".repeat(60));
   console.log("  Aira + LangChain.js — Notarization Demo");
   console.log("=".repeat(60) + "\n");
+
+  // ── 0. Trust check — verify counterparty before interacting ─────
+  // In a multi-agent workflow, check trust before delegating work.
+  console.log("0. Trust check: partner-data-agent");
+  console.log("-".repeat(40));
+  const trust = await handler.checkTrust("partner-data-agent");
+  if (trust.blocked) {
+    console.log(`   BLOCKED: ${trust.blockReason}`);
+    console.log("   Aborting interaction with untrusted agent.");
+    return;
+  }
+  console.log(`   DID resolved: ${trust.didResolved ?? "skipped"}`);
+  console.log(`   VC valid: ${trust.vcValid ?? "skipped"}`);
+  console.log(`   Reputation: ${trust.reputationScore ?? "unknown"} (${trust.reputationTier ?? "unknown"})`);
+  if (trust.recommendation) {
+    console.log(`   Advisory: ${trust.recommendation}`);
+  }
+  console.log("   Trust check passed — proceeding.\n");
 
   // ── 1. Simulate a tool call ──────────────────────────────────────
   // In a real LangChain app, you'd pass `handler.asCallbacks()` to

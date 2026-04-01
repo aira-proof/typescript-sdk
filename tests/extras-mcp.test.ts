@@ -4,24 +4,42 @@ import { getTools, handleToolCall, createServer } from "../src/extras/mcp";
 const mockNotarize = vi.fn().mockResolvedValue({ action_id: "a1", signature: "ed25519:abc" });
 const mockVerifyAction = vi.fn().mockResolvedValue({ valid: true, message: "OK" });
 const mockGetReceipt = vi.fn().mockResolvedValue({ receipt_id: "r1", signature: "ed25519:xyz" });
+const mockResolveDid = vi.fn().mockResolvedValue({ did: "did:web:airaproof.com:agents:partner", document: {} });
+const mockGetAgentCredential = vi.fn().mockResolvedValue({ type: "VerifiableCredential", issuer: "aira" });
+const mockVerifyCredential = vi.fn().mockResolvedValue({ valid: true, checks: ["signature", "expiry", "revocation"] });
+const mockGetReputation = vi.fn().mockResolvedValue({ score: 85, tier: "trusted", total_attestations: 12 });
+const mockRequestMutualSign = vi.fn().mockResolvedValue({ status: "pending", action_id: "a1" });
 
 const mockClient = {
   notarize: mockNotarize,
   verifyAction: mockVerifyAction,
   getReceipt: mockGetReceipt,
+  resolveDid: mockResolveDid,
+  getAgentCredential: mockGetAgentCredential,
+  verifyCredential: mockVerifyCredential,
+  getReputation: mockGetReputation,
+  requestMutualSign: mockRequestMutualSign,
 } as any;
 
 beforeEach(() => {
   mockNotarize.mockClear();
   mockVerifyAction.mockClear();
   mockGetReceipt.mockClear();
+  mockResolveDid.mockClear();
+  mockGetAgentCredential.mockClear();
+  mockVerifyCredential.mockClear();
+  mockGetReputation.mockClear();
+  mockRequestMutualSign.mockClear();
 });
 
 describe("MCP tools", () => {
-  it("getTools returns 3 tools", () => {
+  it("getTools returns 7 tools", () => {
     const tools = getTools();
-    expect(tools).toHaveLength(3);
-    expect(tools.map((t) => t.name)).toEqual(["notarize_action", "verify_action", "get_receipt"]);
+    expect(tools).toHaveLength(7);
+    expect(tools.map((t) => t.name)).toEqual([
+      "notarize_action", "verify_action", "get_receipt",
+      "resolve_did", "verify_credential", "get_reputation", "request_mutual_sign",
+    ]);
   });
 
   it("each tool has name, description, and inputSchema", () => {
@@ -83,6 +101,46 @@ describe("handleToolCall", () => {
 
     expect(JSON.parse(result[0].text)).toHaveProperty("error");
   });
+
+  it("handles resolve_did", async () => {
+    const result = await handleToolCall(mockClient, "resolve_did", {
+      did: "did:web:airaproof.com:agents:partner",
+    });
+
+    expect(JSON.parse(result[0].text)).toHaveProperty("did");
+    expect(mockResolveDid).toHaveBeenCalledWith("did:web:airaproof.com:agents:partner");
+  });
+
+  it("handles verify_credential", async () => {
+    const result = await handleToolCall(mockClient, "verify_credential", {
+      agent_id: "partner",
+    });
+
+    expect(JSON.parse(result[0].text)).toHaveProperty("valid", true);
+    expect(mockGetAgentCredential).toHaveBeenCalledWith("partner");
+    expect(mockVerifyCredential).toHaveBeenCalledOnce();
+  });
+
+  it("handles get_reputation", async () => {
+    const result = await handleToolCall(mockClient, "get_reputation", {
+      agent_id: "partner",
+    });
+
+    const parsed = JSON.parse(result[0].text);
+    expect(parsed).toHaveProperty("score", 85);
+    expect(parsed).toHaveProperty("tier", "trusted");
+    expect(mockGetReputation).toHaveBeenCalledWith("partner");
+  });
+
+  it("handles request_mutual_sign", async () => {
+    const result = await handleToolCall(mockClient, "request_mutual_sign", {
+      action_id: "a1",
+      counterparty_did: "did:web:airaproof.com:agents:partner",
+    });
+
+    expect(JSON.parse(result[0].text)).toHaveProperty("status", "pending");
+    expect(mockRequestMutualSign).toHaveBeenCalledWith("a1", "did:web:airaproof.com:agents:partner");
+  });
 });
 
 describe("createServer", () => {
@@ -95,7 +153,7 @@ describe("createServer", () => {
   it("listTools returns tools array", async () => {
     const server = createServer(mockClient);
     const result = await server.listTools();
-    expect(result.tools).toHaveLength(3);
+    expect(result.tools).toHaveLength(7);
   });
 
   it("callTool delegates to handleToolCall", async () => {

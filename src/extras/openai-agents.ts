@@ -10,6 +10,10 @@
  */
 
 import type { Aira } from "../client";
+import type { TrustPolicy, TrustContext } from "./trust";
+import { checkTrust } from "./trust";
+
+export type { TrustPolicy, TrustContext } from "./trust";
 
 const MAX_DETAILS = 5000;
 
@@ -17,15 +21,28 @@ export class AiraGuardrail {
   private client: Aira;
   private agentId: string;
   private modelId?: string;
+  private trustPolicy?: TrustPolicy;
 
   constructor(
     client: Aira,
     agentId: string,
-    options?: { modelId?: string },
+    options?: { modelId?: string; trustPolicy?: TrustPolicy },
   ) {
     this.client = client;
     this.agentId = agentId;
     this.modelId = options?.modelId;
+    this.trustPolicy = options?.trustPolicy;
+  }
+
+  /**
+   * Check trust for a counterparty agent before interacting.
+   * Advisory by default — only blocks on revoked VC or unregistered agent if configured.
+   */
+  async checkTrust(counterpartyId: string): Promise<TrustContext> {
+    if (!this.trustPolicy) {
+      return { counterpartyId, blocked: false, recommendation: "No trust policy configured" };
+    }
+    return checkTrust(this.client, this.trustPolicy, counterpartyId);
   }
 
   private notarize(actionType: string, details: string): void {
