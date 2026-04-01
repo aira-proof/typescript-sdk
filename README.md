@@ -1,6 +1,6 @@
 # Aira TypeScript SDK
 
-**Legal infrastructure for AI agents.**
+**AI compliance infrastructure for AI agents.**
 
 [![npm version](https://img.shields.io/npm/v/aira-sdk.svg)](https://www.npmjs.com/package/aira-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
