@@ -343,3 +343,156 @@ describe("auth headers", () => {
     expect(mockFetch.mock.calls[0][1].headers.Authorization).toBeUndefined();
   });
 });
+
+// ==================== DID ====================
+
+describe("DID", () => {
+  it("getAgentDid", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { did: "did:web:airaproof.com:agents:my-agent", version: 1 }));
+    const result = await aira.getAgentDid("my-agent");
+    expect(result.did).toBe("did:web:airaproof.com:agents:my-agent");
+    expect(mockFetch.mock.calls[0][0]).toContain("/agents/my-agent/did");
+    expect(mockFetch.mock.calls[0][1].method).toBe("GET");
+  });
+
+  it("rotateAgentKeys", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { did: "did:web:airaproof.com:agents:my-agent", version: 2 }));
+    const result = await aira.rotateAgentKeys("my-agent");
+    expect(result.version).toBe(2);
+    expect(mockFetch.mock.calls[0][1].method).toBe("POST");
+  });
+
+  it("resolveDid", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { id: "did:web:example.com:agents:other" }));
+    const result = await aira.resolveDid("did:web:example.com:agents:other");
+    expect(result.id).toBe("did:web:example.com:agents:other");
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.did).toBe("did:web:example.com:agents:other");
+  });
+});
+
+// ==================== Verifiable Credentials ====================
+
+describe("verifiable credentials", () => {
+  it("getAgentCredential", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { type: ["VerifiableCredential"], issuer: "did:web:airaproof.com" }));
+    const result = await aira.getAgentCredential("my-agent");
+    expect(result.issuer).toBe("did:web:airaproof.com");
+    expect(mockFetch.mock.calls[0][0]).toContain("/agents/my-agent/credential");
+  });
+
+  it("getAgentCredentials", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { credentials: [{ id: "vc-1" }, { id: "vc-2" }] }));
+    const result = await aira.getAgentCredentials("my-agent");
+    expect((result.credentials as unknown[]).length).toBe(2);
+  });
+
+  it("revokeCredential", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { revoked: true }));
+    const result = await aira.revokeCredential("my-agent", "Compromised");
+    expect(result.revoked).toBe(true);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.reason).toBe("Compromised");
+  });
+
+  it("revokeCredential with default reason", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { revoked: true }));
+    await aira.revokeCredential("my-agent");
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.reason).toBe("");
+  });
+
+  it("verifyCredential", async () => {
+    const vc = { type: ["VerifiableCredential"], proof: { type: "Ed25519Signature2020" } };
+    mockFetch.mockResolvedValue(mockResponse(200, { valid: true, checks: {} }));
+    const result = await aira.verifyCredential(vc);
+    expect(result.valid).toBe(true);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.credential).toEqual(vc);
+  });
+});
+
+// ==================== Mutual Notarization ====================
+
+describe("mutual notarization", () => {
+  it("requestMutualSign", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { status: "pending", action_id: "act-1" }));
+    const result = await aira.requestMutualSign("act-1", "did:web:example.com:agents:other");
+    expect(result.status).toBe("pending");
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.counterparty_did).toBe("did:web:example.com:agents:other");
+  });
+
+  it("getPendingMutualSign", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { payload: { action_id: "act-1" }, payload_hash: "sha256:abc" }));
+    const result = await aira.getPendingMutualSign("act-1");
+    expect(result.payload_hash).toBe("sha256:abc");
+    expect(mockFetch.mock.calls[0][1].method).toBe("GET");
+  });
+
+  it("completeMutualSign", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { status: "completed", combined_receipt_hash: "sha256:xyz" }));
+    const result = await aira.completeMutualSign("act-1", "did:web:example.com:agents:other", "zsig123", "sha256:abc");
+    expect(result.status).toBe("completed");
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.did).toBe("did:web:example.com:agents:other");
+    expect(body.signature).toBe("zsig123");
+    expect(body.signed_payload_hash).toBe("sha256:abc");
+  });
+
+  it("getMutualSignReceipt", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { receipt_id: "rct-1", signatures: ["sig-a", "sig-b"] }));
+    const result = await aira.getMutualSignReceipt("act-1");
+    expect((result.signatures as unknown[]).length).toBe(2);
+  });
+
+  it("rejectMutualSign", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { status: "rejected" }));
+    const result = await aira.rejectMutualSign("act-1", "Not authorized");
+    expect(result.status).toBe("rejected");
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.reason).toBe("Not authorized");
+  });
+
+  it("rejectMutualSign with default reason", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { status: "rejected" }));
+    await aira.rejectMutualSign("act-1");
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.reason).toBe("");
+  });
+});
+
+// ==================== Reputation ====================
+
+describe("reputation", () => {
+  it("getReputation", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { score: 84, tier: "Verified" }));
+    const result = await aira.getReputation("my-agent");
+    expect(result.score).toBe(84);
+    expect(result.tier).toBe("Verified");
+  });
+
+  it("getReputationHistory", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { history: [{ score: 80 }, { score: 84 }] }));
+    const result = await aira.getReputationHistory("my-agent");
+    expect((result.history as unknown[]).length).toBe(2);
+  });
+
+  it("attestReputation", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { recorded: true }));
+    const result = await aira.attestReputation("my-agent", "did:web:example.com:agents:other", "act-1", "positive", "zsig456");
+    expect(result.recorded).toBe(true);
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.counterparty_did).toBe("did:web:example.com:agents:other");
+    expect(body.action_id).toBe("act-1");
+    expect(body.attestation).toBe("positive");
+    expect(body.signature).toBe("zsig456");
+  });
+
+  it("verifyReputation", async () => {
+    mockFetch.mockResolvedValue(mockResponse(200, { score_hash: "sha256:rep", inputs: {} }));
+    const result = await aira.verifyReputation("my-agent");
+    expect(result.score_hash).toBe("sha256:rep");
+    expect(mockFetch.mock.calls[0][1].method).toBe("GET");
+  });
+});

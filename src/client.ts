@@ -360,6 +360,96 @@ export class Aira {
     return this.post("/chat", buildBody({ message, history: params?.history, model: params?.model }));
   }
 
+  // ==================== DID ====================
+
+  /** Get full DID info for an agent. */
+  async getAgentDid(slug: string): Promise<Record<string, unknown>> {
+    return this.get(`/agents/${slug}/did`);
+  }
+
+  /** Rotate an agent's DID keypair. */
+  async rotateAgentKeys(slug: string): Promise<Record<string, unknown>> {
+    return this.post(`/agents/${slug}/did/rotate`, {});
+  }
+
+  /** Resolve any did:web DID to its DID document. */
+  async resolveDid(did: string): Promise<Record<string, unknown>> {
+    return this.post("/dids/resolve", { did });
+  }
+
+  // ==================== Verifiable Credentials ====================
+
+  /** Get the current valid VC for an agent. */
+  async getAgentCredential(slug: string): Promise<Record<string, unknown>> {
+    return this.get(`/agents/${slug}/credential`);
+  }
+
+  /** Get full credential history for an agent. */
+  async getAgentCredentials(slug: string): Promise<Record<string, unknown>> {
+    return this.get(`/agents/${slug}/credentials`);
+  }
+
+  /** Revoke the current credential for an agent. */
+  async revokeCredential(slug: string, reason = ""): Promise<Record<string, unknown>> {
+    return this.post(`/agents/${slug}/credentials/revoke`, { reason });
+  }
+
+  /** Verify a Verifiable Credential — checks signature, expiry, revocation. */
+  async verifyCredential(credential: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.post("/credentials/verify", { credential });
+  }
+
+  // ==================== Mutual Notarization ====================
+
+  /** Initiate a mutual signing request for an action. */
+  async requestMutualSign(actionId: string, counterpartyDid: string): Promise<Record<string, unknown>> {
+    return this.post(`/actions/${actionId}/mutual-sign/request`, { counterparty_did: counterpartyDid });
+  }
+
+  /** Get the action payload awaiting counterparty signature. */
+  async getPendingMutualSign(actionId: string): Promise<Record<string, unknown>> {
+    return this.get(`/actions/${actionId}/mutual-sign/pending`);
+  }
+
+  /** Submit counterparty signature to complete mutual signing. */
+  async completeMutualSign(actionId: string, did: string, signature: string, signedPayloadHash: string): Promise<Record<string, unknown>> {
+    return this.post(`/actions/${actionId}/mutual-sign/complete`, { did, signature, signed_payload_hash: signedPayloadHash });
+  }
+
+  /** Get the co-signed receipt for a mutually signed action. */
+  async getMutualSignReceipt(actionId: string): Promise<Record<string, unknown>> {
+    return this.get(`/actions/${actionId}/mutual-sign/receipt`);
+  }
+
+  /** Reject a mutual signing request. */
+  async rejectMutualSign(actionId: string, reason = ""): Promise<Record<string, unknown>> {
+    return this.post(`/actions/${actionId}/mutual-sign/reject`, { reason });
+  }
+
+  // ==================== Reputation ====================
+
+  /** Get current reputation score for an agent. */
+  async getReputation(slug: string): Promise<Record<string, unknown>> {
+    return this.get(`/agents/${slug}/reputation`);
+  }
+
+  /** Get full reputation history for an agent. */
+  async getReputationHistory(slug: string): Promise<Record<string, unknown>> {
+    return this.get(`/agents/${slug}/reputation/history`);
+  }
+
+  /** Submit a signed attestation of a successful interaction. */
+  async attestReputation(slug: string, counterpartyDid: string, actionId: string, attestation: string, signature: string): Promise<Record<string, unknown>> {
+    return this.post(`/agents/${slug}/reputation/attest`, {
+      counterparty_did: counterpartyDid, action_id: actionId, attestation, signature,
+    });
+  }
+
+  /** Verify a reputation score by returning inputs and score_hash. */
+  async verifyReputation(slug: string): Promise<Record<string, unknown>> {
+    return this.get(`/agents/${slug}/reputation/verify`);
+  }
+
   // ==================== Session ====================
 
   /** Create a scoped session with pre-filled defaults. */
