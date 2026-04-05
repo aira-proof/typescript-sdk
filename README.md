@@ -51,7 +51,7 @@ All 52 methods on `Aira`. Every write operation produces a cryptographic receipt
 
 | Category | Method | Description |
 |---|---|---|
-| **Actions** | `notarize()` | Notarize an action -- returns Ed25519-signed receipt |
+| **Actions** | `notarize()` | Notarize an action -- returns Ed25519-signed receipt (supports `requireApproval`) |
 | | `getAction()` | Retrieve action details + receipt |
 | | `listActions()` | List actions with filters (type, agent, status) |
 | | `authorizeAction()` | Human co-signature on high-stakes action |
@@ -255,6 +255,36 @@ console.log(aira.pendingCount);  // 2
 // Flush to API when back online — receipts are generated for each action
 const results = await aira.sync();
 ```
+
+---
+
+## Human Approval
+
+Hold high-stakes actions for human review before the cryptographic receipt is issued. Approvers receive an email with Approve/Deny buttons.
+
+```typescript
+const receipt = await aira.notarize({
+  actionType: "loan_decision",
+  details: "Approved €15,000 loan for Maria Schmidt",
+  agentId: "lending-agent",
+  requireApproval: true,
+  approvers: ["compliance@acme.com", "risk@acme.com"],
+});
+console.log(receipt.status);      // "pending_approval"
+console.log(receipt.receipt_id);  // undefined — no receipt until approved
+
+// Falls back to org default approvers (Settings → Approvers)
+const receipt2 = await aira.notarize({
+  actionType: "wire_transfer",
+  details: "Transfer $50,000 to vendor account",
+  agentId: "payments-agent",
+  requireApproval: true,
+});
+```
+
+The approver clicks "Approve" in the email → receipt is minted with Ed25519 signature + RFC 3161 timestamp → `action.approved` webhook fires.
+
+Configure default approvers in the [dashboard](https://app.airaproof.com/dashboard/settings/approvers) or via the `/approvers` API.
 
 ---
 
