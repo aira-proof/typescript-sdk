@@ -7,6 +7,7 @@ export interface ActionReceipt {
   timestamp_token: string | null;
   created_at: string;
   request_id: string;
+  status?: string;
   action_type?: string;
   agent_id?: string | null;
   warnings?: string[] | null;

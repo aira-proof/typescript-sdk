@@ -117,6 +117,8 @@ export class Aira {
     parentActionId?: string;
     storeDetails?: boolean;
     idempotencyKey?: string;
+    requireApproval?: boolean;
+    approvers?: string[];
   }): Promise<ActionReceipt> {
     const body = buildBody({
       action_type: params.actionType,
@@ -129,6 +131,8 @@ export class Aira {
       parent_action_id: params.parentActionId,
       store_details: params.storeDetails || undefined,
       idempotency_key: params.idempotencyKey,
+      require_approval: params.requireApproval || undefined,
+      approvers: params.approvers,
     });
     return this.post<ActionReceipt>("/actions", body);
   }

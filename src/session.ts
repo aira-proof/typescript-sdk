@@ -23,6 +23,8 @@ export class AiraSession {
     parentActionId?: string;
     storeDetails?: boolean;
     idempotencyKey?: string;
+    requireApproval?: boolean;
+    approvers?: string[];
   }): Promise<ActionReceipt> {
     const merged = {
       agentId: this.defaults.agentId as string,
