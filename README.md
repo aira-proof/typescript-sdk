@@ -7,22 +7,6 @@
 
 Aira produces cryptographic receipts for every action your AI agent takes. Ed25519 signatures and RFC 3161 timestamps create tamper-proof, court-admissible proof of what happened, who authorized it, and which model made the decision. Built for EU AI Act, SR 11-7, and GDPR compliance.
 
----
-
-## Integration Matrix
-
-Drop Aira into your existing agent framework with one import:
-
-| Framework | Import | Integration |
-|---|---|---|
-| **LangChain.js** | `import { AiraCallbackHandler } from "aira-sdk/extras/langchain"` | Callback handler |
-| **Vercel AI** | `import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai"` | Middleware |
-| **OpenAI Agents** | `import { AiraGuardrail } from "aira-sdk/extras/openai-agents"` | Guardrail |
-| **MCP** | `import { createServer } from "aira-sdk/extras/mcp"` | MCP Server |
-| **Webhooks** | `import { verifySignature } from "aira-sdk/extras/webhooks"` | Verification |
-
-Or install the core SDK alone:
-
 ```bash
 npm install aira-sdk
 ```
@@ -50,147 +34,6 @@ console.log(receipt.payload_hash);   // sha256:e5f6a7b8...
 console.log(receipt.signature);       // ed25519:base64url...
 console.log(receipt.action_id);       // uuid — publicly verifiable
 ```
-
----
-
-## Framework Integrations
-
-### LangChain.js
-
-`AiraCallbackHandler` notarizes every tool call, chain completion, and LLM invocation with a cryptographic receipt. No changes to your chain logic.
-
-```typescript
-import { Aira } from "aira-sdk";
-import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
-
-const aira = new Aira({ apiKey: "aira_live_xxx" });
-const handler = new AiraCallbackHandler({ client: aira, agentId: "research-agent", modelId: "gpt-5.2" });
-
-// Every tool call and chain completion gets a signed receipt
-const result = await chain.invoke({ input: "Analyze Q1 revenue" }, { callbacks: [handler] });
-```
-
-### Vercel AI
-
-`AiraVercelMiddleware` wraps your Vercel AI `streamText` / `generateText` calls so every model invocation is notarized with a tamper-proof receipt.
-
-```typescript
-import { Aira } from "aira-sdk";
-import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai";
-
-const aira = new Aira({ apiKey: "aira_live_xxx" });
-const middleware = new AiraVercelMiddleware({ client: aira, agentId: "assistant-agent" });
-
-// Wrap your Vercel AI calls — receipts at invocation and completion
-const result = await middleware.wrapGenerateText({
-  model: openai("gpt-5.2"),
-  prompt: "Summarize the contract terms",
-});
-```
-
-### OpenAI Agents SDK
-
-`AiraGuardrail` wraps any tool function to automatically notarize both invocation and result with cryptographic proof.
-
-```typescript
-import { Aira } from "aira-sdk";
-import { AiraGuardrail } from "aira-sdk/extras/openai-agents";
-
-const aira = new Aira({ apiKey: "aira_live_xxx" });
-const guardrail = new AiraGuardrail({ client: aira, agentId: "assistant-agent" });
-
-// Wrap tools — every call and result gets a signed receipt
-const search = guardrail.wrapTool(searchTool, { toolName: "web_search" });
-const execute = guardrail.wrapTool(codeExecutor, { toolName: "code_exec" });
-```
-
----
-
-## MCP Server
-
-Expose Aira as an MCP tool server. Any MCP-compatible AI agent can notarize actions and verify receipts without SDK integration.
-
-```typescript
-import { createServer } from "aira-sdk/extras/mcp";
-
-const server = createServer({ apiKey: "aira_live_xxx" });
-server.listen(); // stdio transport
-```
-
-The server exposes three tools: `notarize_action`, `verify_action`, and `get_receipt` -- each producing cryptographically signed results.
-
-Add to your MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "aira": {
-      "command": "npx",
-      "args": ["aira-sdk", "mcp"],
-      "env": { "AIRA_API_KEY": "aira_live_xxx" }
-    }
-  }
-}
-```
-
----
-
-## Session
-
-Pre-fill defaults for a block of related actions. Every `notarize()` call within the session inherits the agent identity, producing receipts that share a common provenance chain.
-
-```typescript
-const sess = aira.session("onboarding-agent", { modelId: "claude-sonnet-4-6" });
-
-await sess.notarize({ actionType: "identity_verified", details: "Verified customer ID #4521" });
-await sess.notarize({ actionType: "account_created", details: "Created account for customer #4521" });
-await sess.notarize({ actionType: "welcome_sent", details: "Sent welcome email to customer #4521" });
-```
-
----
-
-## Offline Mode
-
-Queue notarizations locally when connectivity is unavailable. Cryptographic receipts are generated server-side when you sync -- nothing is lost.
-
-```typescript
-const aira = new Aira({ apiKey: "aira_live_xxx", offline: true });
-
-// These queue locally — no network calls
-await aira.notarize({ actionType: "scan_completed", details: "Scanned document batch #77" });
-await aira.notarize({ actionType: "classification_done", details: "Classified 142 documents" });
-
-console.log(aira.pendingCount);  // 2
-
-// Flush to API when back online — receipts are generated for each action
-const results = await aira.sync();
-```
-
----
-
-## Webhook Verification
-
-Verify that incoming webhooks are authentic Aira events, not forged requests. HMAC-SHA256 signature verification ensures tamper-proof delivery.
-
-```typescript
-import { verifySignature, parseEvent } from "aira-sdk/extras/webhooks";
-
-// Verify the webhook signature (HMAC-SHA256)
-const isValid = verifySignature({
-  payload: request.body,
-  signature: request.headers["x-aira-signature"],
-  secret: "whsec_xxx",
-});
-
-if (isValid) {
-  const event = parseEvent(request.body);
-  console.log(event.eventType);    // "action.notarized"
-  console.log(event.data);         // Action data with cryptographic receipt
-  console.log(event.deliveryId);   // Unique delivery ID
-}
-```
-
-Supported event types: `action.notarized`, `action.authorized`, `agent.registered`, `agent.decommissioned`, `evidence.sealed`, `escrow.deposited`, `escrow.released`, `escrow.disputed`, `compliance.snapshot_created`, `case.complete`, `case.requires_human_review`.
 
 ---
 
@@ -371,6 +214,157 @@ const handler = new AiraCallbackHandler(aira, "research-agent", {
   },
 });
 ```
+
+---
+
+## Session
+
+Pre-fill defaults for a block of related actions. Every `notarize()` call within the session inherits the agent identity, producing receipts that share a common provenance chain.
+
+```typescript
+const sess = aira.session("onboarding-agent", { modelId: "claude-sonnet-4-6" });
+
+await sess.notarize({ actionType: "identity_verified", details: "Verified customer ID #4521" });
+await sess.notarize({ actionType: "account_created", details: "Created account for customer #4521" });
+await sess.notarize({ actionType: "welcome_sent", details: "Sent welcome email to customer #4521" });
+```
+
+---
+
+## Offline Mode
+
+Queue notarizations locally when connectivity is unavailable. Cryptographic receipts are generated server-side when you sync -- nothing is lost.
+
+```typescript
+const aira = new Aira({ apiKey: "aira_live_xxx", offline: true });
+
+// These queue locally — no network calls
+await aira.notarize({ actionType: "scan_completed", details: "Scanned document batch #77" });
+await aira.notarize({ actionType: "classification_done", details: "Classified 142 documents" });
+
+console.log(aira.pendingCount);  // 2
+
+// Flush to API when back online — receipts are generated for each action
+const results = await aira.sync();
+```
+
+---
+
+## Framework Integrations
+
+Drop Aira into your existing agent framework with one import:
+
+| Framework | Import | Integration |
+|---|---|---|
+| **LangChain.js** | `import { AiraCallbackHandler } from "aira-sdk/extras/langchain"` | Callback handler |
+| **Vercel AI** | `import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai"` | Middleware |
+| **OpenAI Agents** | `import { AiraGuardrail } from "aira-sdk/extras/openai-agents"` | Guardrail |
+| **MCP** | `import { createServer } from "aira-sdk/extras/mcp"` | MCP Server |
+| **Webhooks** | `import { verifySignature } from "aira-sdk/extras/webhooks"` | Verification |
+
+### LangChain.js
+
+`AiraCallbackHandler` notarizes every tool call, chain completion, and LLM invocation with a cryptographic receipt. No changes to your chain logic.
+
+```typescript
+import { Aira } from "aira-sdk";
+import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
+
+const aira = new Aira({ apiKey: "aira_live_xxx" });
+const handler = new AiraCallbackHandler({ client: aira, agentId: "research-agent", modelId: "gpt-5.2" });
+
+// Every tool call and chain completion gets a signed receipt
+const result = await chain.invoke({ input: "Analyze Q1 revenue" }, { callbacks: [handler] });
+```
+
+### Vercel AI
+
+`AiraVercelMiddleware` wraps your Vercel AI `streamText` / `generateText` calls so every model invocation is notarized with a tamper-proof receipt.
+
+```typescript
+import { Aira } from "aira-sdk";
+import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai";
+
+const aira = new Aira({ apiKey: "aira_live_xxx" });
+const middleware = new AiraVercelMiddleware({ client: aira, agentId: "assistant-agent" });
+
+// Wrap your Vercel AI calls — receipts at invocation and completion
+const result = await middleware.wrapGenerateText({
+  model: openai("gpt-5.2"),
+  prompt: "Summarize the contract terms",
+});
+```
+
+### OpenAI Agents SDK
+
+`AiraGuardrail` wraps any tool function to automatically notarize both invocation and result with cryptographic proof.
+
+```typescript
+import { Aira } from "aira-sdk";
+import { AiraGuardrail } from "aira-sdk/extras/openai-agents";
+
+const aira = new Aira({ apiKey: "aira_live_xxx" });
+const guardrail = new AiraGuardrail({ client: aira, agentId: "assistant-agent" });
+
+// Wrap tools — every call and result gets a signed receipt
+const search = guardrail.wrapTool(searchTool, { toolName: "web_search" });
+const execute = guardrail.wrapTool(codeExecutor, { toolName: "code_exec" });
+```
+
+---
+
+## MCP Server
+
+Expose Aira as an MCP tool server. Any MCP-compatible AI agent can notarize actions and verify receipts without SDK integration.
+
+```typescript
+import { createServer } from "aira-sdk/extras/mcp";
+
+const server = createServer({ apiKey: "aira_live_xxx" });
+server.listen(); // stdio transport
+```
+
+The server exposes three tools: `notarize_action`, `verify_action`, and `get_receipt` -- each producing cryptographically signed results.
+
+Add to your MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "aira": {
+      "command": "npx",
+      "args": ["aira-sdk", "mcp"],
+      "env": { "AIRA_API_KEY": "aira_live_xxx" }
+    }
+  }
+}
+```
+
+---
+
+## Webhook Verification
+
+Verify that incoming webhooks are authentic Aira events, not forged requests. HMAC-SHA256 signature verification ensures tamper-proof delivery.
+
+```typescript
+import { verifySignature, parseEvent } from "aira-sdk/extras/webhooks";
+
+// Verify the webhook signature (HMAC-SHA256)
+const isValid = verifySignature({
+  payload: request.body,
+  signature: request.headers["x-aira-signature"],
+  secret: "whsec_xxx",
+});
+
+if (isValid) {
+  const event = parseEvent(request.body);
+  console.log(event.eventType);    // "action.notarized"
+  console.log(event.data);         // Action data with cryptographic receipt
+  console.log(event.deliveryId);   // Unique delivery ID
+}
+```
+
+Supported event types: `action.notarized`, `action.authorized`, `agent.registered`, `agent.decommissioned`, `evidence.sealed`, `escrow.deposited`, `escrow.released`, `escrow.disputed`, `compliance.snapshot_created`, `case.complete`, `case.requires_human_review`.
 
 ---
 
