@@ -27,11 +27,11 @@ import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai";
 import { streamText } from "ai";
 
 const aira = new Aira({ apiKey: process.env.AIRA_API_KEY! });
-const middleware = new AiraVercelMiddleware(aira, "my-agent", { modelId: "gpt-4o" });
+const middleware = new AiraVercelMiddleware(aira, "my-agent", { modelId: "gpt-5.2" });
 
 // Option 1: Spread callbacks into streamText/generateText
 const result = await streamText({
-  model: openai("gpt-4o"),
+  model: openai("gpt-5.2"),
   prompt: "Summarize the document",
   ...middleware.asCallbacks(),
 });

@@ -324,7 +324,7 @@ describe("chat", () => {
     mockFetch.mockResolvedValue(mockResponse(200, { content: "answer", tools_used: [], model_id: "gpt-4o" }));
     await aira.ask("question", { model: "gpt-4o" });
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.model).toBe("gpt-4o");
+    expect(body.model_id).toBe("gpt-4o");
   });
 });
 

@@ -126,7 +126,7 @@ async function main() {
   try {
     const caseResult = await aira.runCase(
       "Should we approve a €15,000 loan? Credit: 742, income: €45,000",
-      [MODEL_ID, "gpt-4o"],
+      [MODEL_ID, "gpt-5.2"],
     );
     const consensus = caseResult.consensus as Record<string, unknown>;
     console.log(`   ✓ Decision: ${consensus?.decision ?? "N/A"}`);

@@ -26,7 +26,7 @@ const aira = new Aira({ apiKey: AIRA_API_KEY });
 
 // Create middleware — notarizes every Vercel AI SDK event automatically.
 const middleware = new AiraVercelMiddleware(aira, "vercel-ai-agent", {
-  modelId: "gpt-4o",
+  modelId: "gpt-5.2",
 });
 
 async function main() {

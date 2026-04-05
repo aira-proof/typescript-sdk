@@ -64,7 +64,7 @@ import { Aira } from "aira-sdk";
 import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
 
 const aira = new Aira({ apiKey: "aira_live_xxx" });
-const handler = new AiraCallbackHandler({ client: aira, agentId: "research-agent", modelId: "gpt-4o" });
+const handler = new AiraCallbackHandler({ client: aira, agentId: "research-agent", modelId: "gpt-5.2" });
 
 // Every tool call and chain completion gets a signed receipt
 const result = await chain.invoke({ input: "Analyze Q1 revenue" }, { callbacks: [handler] });
@@ -83,7 +83,7 @@ const middleware = new AiraVercelMiddleware({ client: aira, agentId: "assistant-
 
 // Wrap your Vercel AI calls — receipts at invocation and completion
 const result = await middleware.wrapGenerateText({
-  model: openai("gpt-4o"),
+  model: openai("gpt-5.2"),
   prompt: "Summarize the contract terms",
 });
 ```
@@ -196,7 +196,7 @@ Supported event types: `action.notarized`, `action.authorized`, `agent.registere
 
 ## Core SDK Methods
 
-All 56 methods on `Aira`. Every write operation produces a cryptographic receipt.
+All 52 methods on `Aira`. Every write operation produces a cryptographic receipt.
 
 | Category | Method | Description |
 |---|---|---|
@@ -224,15 +224,9 @@ All 56 methods on `Aira`. Every write operation produces a cryptographic receipt
 | | `revokeCredential()` | Revoke agent's Verifiable Credential |
 | | `requestMutualSign()` | Initiate mutual notarization with counterparty |
 | | `completeMutualSign()` | Complete mutual notarization (counterparty signs) |
-| | `getMutualSignStatus()` | Check status of a mutual sign request |
 | | `getReputation()` | Get agent reputation score and tier |
 | | `listReputationHistory()` | List reputation score history |
-| | `setEndpointPolicy()` | Set endpoint verification policy |
-| | `getEndpointPolicy()` | Get current endpoint policy |
 | | `resolveDid()` | Resolve any DID to its DID Document |
-| | `checkTrust()` | Run full trust check against a counterparty |
-| | `listCredentials()` | List all credentials for an agent |
-| | `getTrustBundle()` | Get DID + VC + reputation in one call |
 | **Cases** | `runCase()` | Multi-model consensus adjudication |
 | | `getCase()` | Retrieve case result |
 | | `listCases()` | List cases |
@@ -359,28 +353,6 @@ try {
 }
 ```
 
-#### Manage whitelist via API
-
-```typescript
-// List current whitelist
-const entries = await aira.listEndpointWhitelist();
-
-// Add a new endpoint pattern
-const entry = await aira.addEndpointWhitelist({
-  urlPattern: "https://api.twilio.com/*",
-  name: "Twilio API",
-});
-
-// List pending approval requests
-const approvals = await aira.listEndpointApprovals();
-
-// Approve a pending request (admin only)
-await aira.approveEndpoint({ approvalId: "eap_def456" });
-
-// Delete a whitelist entry (admin only)
-await aira.deleteEndpointWhitelist({ entryId: "ewl_abc123" });
-```
-
 ### Trust Policy in Integrations
 
 Pass a `trustPolicy` to any framework integration to run automated trust checks before agent interactions:
@@ -389,7 +361,7 @@ Pass a `trustPolicy` to any framework integration to run automated trust checks 
 import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
 
 const handler = new AiraCallbackHandler(aira, "research-agent", {
-  modelId: "gpt-4o",
+  modelId: "gpt-5.2",
   trustPolicy: {
     verifyCounterparty: true,    // resolve counterparty DID
     minReputation: 60,           // warn if reputation score below 60

@@ -357,7 +357,7 @@ export class Aira {
   // ==================== Chat ====================
 
   async ask(message: string, params?: { history?: Record<string, unknown>[]; model?: string }): Promise<{ content: string; tools_used: string[]; model_id?: string }> {
-    return this.post("/chat", buildBody({ message, history: params?.history, model: params?.model }));
+    return this.post("/chat", buildBody({ message, history: params?.history, model_id: params?.model }));
   }
 
   // ==================== DID ====================

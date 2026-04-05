@@ -28,7 +28,7 @@ const aira = new Aira({ apiKey: AIRA_API_KEY });
 // automatically notarized with a cryptographic receipt.
 // The trustPolicy enables automated trust checks before agent interactions.
 const handler = new AiraCallbackHandler(aira, "langchain-research-agent", {
-  modelId: "gpt-4o",
+  modelId: "gpt-5.2",
   trustPolicy: {
     verifyCounterparty: true,    // Resolve DID before interacting
     minReputation: 50,           // Warn if reputation < 50

@@ -1,12 +1,15 @@
 /** Cryptographic receipt from notarizing an action. */
 export interface ActionReceipt {
   action_id: string;
+  receipt_id: string;
   payload_hash: string;
   signature: string;
-  receipt_id: string;
-  action_type: string;
-  agent_id: string | null;
+  timestamp_token: string | null;
   created_at: string;
+  request_id: string;
+  action_type?: string;
+  agent_id?: string | null;
+  warnings?: string[] | null;
 }
 
 /** Full action details including receipt and authorizations. */
@@ -66,30 +69,41 @@ export interface EvidencePackage {
   id: string;
   title: string;
   description: string | null;
+  action_ids: string[];
   package_hash: string;
   signature: string;
-  action_count: number;
+  status: string;
   created_at: string;
+  request_id: string;
+  agent_slugs?: string[] | null;
 }
 
 /** Compliance snapshot. */
 export interface ComplianceSnapshot {
   id: string;
   framework: string;
-  agent_slug: string | null;
-  findings: Record<string, string>;
   status: string;
+  findings: Record<string, string>;
+  snapshot_hash: string;
+  signature: string;
+  snapshot_at: string;
   created_at: string;
+  request_id: string;
+  agent_id?: string | null;
 }
 
 /** Escrow account. */
 export interface EscrowAccount {
   id: string;
-  status: string;
   currency: string;
   balance: string;
-  purpose: string | null;
+  status: string;
   created_at: string;
+  request_id: string;
+  agent_id?: string | null;
+  counterparty_org_id?: string | null;
+  purpose?: string | null;
+  transactions?: EscrowTransaction[];
 }
 
 /** Escrow transaction (deposit, release, dispute). */
@@ -97,19 +111,24 @@ export interface EscrowTransaction {
   id: string;
   transaction_type: string;
   amount: string;
-  description: string | null;
+  currency: string;
   transaction_hash: string;
   signature: string;
+  status: string;
   created_at: string;
+  description?: string | null;
+  reference_action_id?: string | null;
 }
 
 /** Public verification result. */
 export interface VerifyResult {
   valid: boolean;
-  receipt_id: string | null;
-  verified_at: string;
   public_key_id: string;
   message: string;
+  verified_at: string;
+  request_id: string;
+  receipt_id?: string | null;
+  action_id?: string | null;
 }
 
 /** Paginated list response. */

@@ -27,7 +27,7 @@ import { Aira } from "aira-sdk";
 import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
 
 const aira = new Aira({ apiKey: process.env.AIRA_API_KEY! });
-const handler = new AiraCallbackHandler(aira, "my-agent", { modelId: "gpt-4o" });
+const handler = new AiraCallbackHandler(aira, "my-agent", { modelId: "gpt-5.2" });
 
 // Pass to any LangChain chain or agent:
 const result = await myChain.invoke(input, {
