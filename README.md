@@ -11,6 +11,14 @@ Aira produces cryptographic receipts for every action your AI agent takes. Ed255
 npm install aira-sdk
 ```
 
+Framework integrations use sub-imports — just make sure the peer dependency is installed:
+
+```bash
+npm install aira-sdk langchain      # for LangChain.js
+npm install aira-sdk ai             # for Vercel AI
+npm install aira-sdk @openai/agents # for OpenAI Agents
+```
+
 ---
 
 ## Quick Start
