@@ -288,13 +288,38 @@ Configure default approvers in the [dashboard](https://app.airaproof.com/dashboa
 
 ### Automatic Policy Evaluation
 
-Org admins can configure policies in the dashboard that automatically evaluate every action. Three modes:
+Org admins configure policies in the dashboard — your code doesn't change. Every `notarize()` call is automatically evaluated against active policies before the receipt is issued.
 
-- **Rules**: Deterministic conditions (e.g., all wire transfers require approval)
-- **AI**: Single LLM evaluates action against a natural language policy
-- **Consensus**: Multiple LLMs evaluate independently — disagreement triggers human review
+Three evaluation modes:
 
-Every policy evaluation produces a cryptographic receipt. No SDK changes needed — policies are evaluated server-side on every `notarize()` call.
+- **Rules**: Deterministic conditions — instant, no LLM call
+- **AI**: Single LLM evaluates action against a natural language policy (1-5s)
+- **Consensus**: Multiple LLMs evaluate independently — disagreement triggers human review (3-10s)
+
+```typescript
+// Your code stays the same — policies evaluate automatically
+const receipt = await aira.notarize({
+  actionType: "wire_transfer",
+  details: "Transfer $50,000 to vendor account",
+  agentId: "billing-agent",
+});
+
+// If a policy triggers "require_approval":
+console.log(receipt.status);             // "pending_approval"
+console.log(receipt.policy_evaluation);  // { policy_name: "Wire transfers need approval", decision: "require_approval", ... }
+
+// If a policy triggers "deny":
+import { AiraError } from "aira-sdk";
+try {
+  await aira.notarize({ actionType: "data_deletion", details: "Delete customer records" });
+} catch (e) {
+  if (e instanceof AiraError && e.code === "POLICY_DENIED") {
+    console.log(e.message);  // "Action denied by policy 'Block deletions': ..."
+  }
+}
+```
+
+Every policy evaluation produces a cryptographic receipt — proof the policy was checked. The SDK `requireApproval: true` override still works and skips policy evaluation entirely.
 
 Configure policies at [Settings → Policies](https://app.airaproof.com/dashboard/policies).
 
