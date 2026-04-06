@@ -1,11 +1,11 @@
 # Aira TypeScript SDK
 
-**AI compliance infrastructure for AI agents.**
+**AI governance infrastructure.**
 
 [![npm version](https://img.shields.io/npm/v/aira-sdk.svg)](https://www.npmjs.com/package/aira-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-Aira produces cryptographic receipts for every action your AI agent takes. Ed25519 signatures and RFC 3161 timestamps create tamper-proof, court-admissible proof of what happened, who authorized it, and which model made the decision. Built for EU AI Act, SR 11-7, and GDPR compliance.
+Policies evaluate every agent action. Humans approve high-stakes decisions. Cryptographic receipts prove it all. Rules, AI, and multi-model consensus govern what your agents can do — with Ed25519 signatures, RFC 3161 timestamps, and W3C DID identity. Built for EU AI Act, SR 11-7, and GDPR compliance.
 
 ```bash
 npm install aira-sdk
