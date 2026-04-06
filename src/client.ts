@@ -14,7 +14,7 @@ function buildBody(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null));
 }
 
-function sanitizeDetails(text: string): string {
+function truncateDetails(text: string): string {
   return text.length > MAX_DETAILS_LENGTH ? text.slice(0, MAX_DETAILS_LENGTH) + "...[truncated]" : text;
 }
 
@@ -92,10 +92,18 @@ export class Aira {
   }
 
   private put<T = Record<string, unknown>>(path: string, body: Record<string, unknown>): Promise<T> {
+    if (this.queue) {
+      const qid = this.queue.enqueue("PUT", path, body);
+      return Promise.resolve({ _offline: true, _queue_id: qid } as unknown as T);
+    }
     return this.request<T>("PUT", path, body);
   }
 
   private del<T = Record<string, unknown>>(path: string): Promise<T> {
+    if (this.queue) {
+      const qid = this.queue.enqueue("DELETE", path, {});
+      return Promise.resolve({ _offline: true, _queue_id: qid } as unknown as T);
+    }
     return this.request<T>("DELETE", path);
   }
 
@@ -122,7 +130,7 @@ export class Aira {
   }): Promise<ActionReceipt> {
     const body = buildBody({
       action_type: params.actionType,
-      details: sanitizeDetails(params.details),
+      details: truncateDetails(params.details),
       agent_id: params.agentId,
       agent_version: params.agentVersion,
       model_id: params.modelId,
