@@ -11,6 +11,13 @@ export interface ActionReceipt {
   action_type?: string;
   agent_id?: string | null;
   warnings?: string[] | null;
+  policy_evaluation?: {
+    policy_id: string;
+    policy_name: string;
+    decision: string;
+    reasoning: string | null;
+    confidence: number | null;
+  } | null;
 }
 
 /** Full action details including receipt and authorizations. */
