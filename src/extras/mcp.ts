@@ -9,6 +9,7 @@
  */
 
 import type { Aira } from "../client";
+import { AiraError } from "../types";
 
 /** Tool definition for MCP list_tools response. */
 export interface MCPTool {
@@ -163,7 +164,10 @@ export async function handleToolCall(
 
     return [{ type: "text", text: JSON.stringify({ error: `Unknown tool: ${name}` }) }];
   } catch (e) {
-    return [{ type: "text", text: JSON.stringify({ error: String(e) }) }];
+    if (e instanceof AiraError) {
+      return [{ type: "text", text: JSON.stringify({ error: e.message, code: e.code }) }];
+    }
+    return [{ type: "text", text: JSON.stringify({ error: "Internal error", code: "SDK_ERROR" }) }];
   }
 }
 

@@ -1,10 +1,10 @@
 /** Cryptographic receipt from notarizing an action. */
 export interface ActionReceipt {
   action_id: string;
-  receipt_id: string;
-  payload_hash: string;
-  signature: string;
-  timestamp_token: string | null;
+  receipt_id?: string;
+  payload_hash?: string;
+  signature?: string;
+  timestamp_token?: string | null;
   created_at: string;
   request_id: string;
   status?: string;
@@ -70,6 +70,7 @@ export interface AgentVersion {
   changelog: string | null;
   status: string;
   published_at: string | null;
+  created_at: string;
 }
 
 /** Sealed evidence package. */
