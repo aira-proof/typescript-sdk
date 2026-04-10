@@ -1,6 +1,6 @@
 import {
   Authorization, ActionReceipt, ActionDetail, AgentDetail, AgentVersion,
-  EvidencePackage, ComplianceSnapshot, EscrowAccount, EscrowTransaction,
+  CosignResult, EvidencePackage, ComplianceSnapshot, EscrowAccount, EscrowTransaction,
   VerifyResult, PaginatedList, AiraError,
 } from "./types";
 import { OfflineQueue, type QueuedRequest } from "./offline";
@@ -64,7 +64,16 @@ export class Aira {
       const data = (await res.json().catch(() => ({ error: res.statusText, code: "UNKNOWN" }))) as Record<string, unknown>;
 
       if (!res.ok) {
-        throw new AiraError(res.status, (data.code as string) ?? "UNKNOWN", (data.error as string) ?? res.statusText);
+        // Backend returns the human-readable text under "error"; the spec
+        // refers to it as ``message`` on the SDK side.
+        const message =
+          (data.message as string) ?? (data.error as string) ?? res.statusText;
+        throw new AiraError(
+          res.status,
+          (data.code as string) ?? "UNKNOWN",
+          message,
+          (data.details as Record<string, unknown>) ?? {},
+        );
       }
 
       return data as T;
@@ -190,12 +199,15 @@ export class Aira {
   }
 
   /**
-   * Add a human co-signature to an authorized action.
+   * Add a human co-signature to an action that already exists.
    *
-   * Returns `{ cosigner_email, cosigned_at, cosignature_id }`.
+   * This is distinct from the authorization gate (it runs against `/cosign`,
+   * not `/authorize`). It records that a specific human has acknowledged or
+   * signed off on an action that was already authorized and notarized.
+   * Requires JWT auth (dashboard user, not an API key).
    */
-  async cosign(actionId: string): Promise<Record<string, unknown>> {
-    return this.post(`/actions/${actionId}/cosign`, {});
+  async cosign(params: { actionId: string }): Promise<CosignResult> {
+    return this.post<CosignResult>(`/actions/${params.actionId}/cosign`, {});
   }
 
   async setLegalHold(actionId: string): Promise<Record<string, unknown>> {

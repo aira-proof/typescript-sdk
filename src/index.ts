@@ -10,6 +10,7 @@ export {
   type ActionDetail,
   type AgentDetail,
   type AgentVersion,
+  type CosignResult,
   type EvidencePackage,
   type ComplianceSnapshot,
   type EscrowAccount,

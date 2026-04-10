@@ -162,15 +162,51 @@ export interface PaginatedList<T = Record<string, unknown>> {
   has_more: boolean;
 }
 
-/** Aira API error. */
-export class AiraError extends Error {
-  status: number;
-  code: string;
+/**
+ * Human co-signature on an action.
+ *
+ * Returned by `Aira.cosign()`. Records that a specific human has
+ * acknowledged or signed off on an action that was already authorized
+ * (and optionally already notarized).
+ */
+export interface CosignResult {
+  cosignature_id: string;
+  action_id: string;
+  cosigner_email: string;
+  cosigned_at: string;
+  request_id: string;
+}
 
-  constructor(status: number, code: string, message: string) {
+/**
+ * Aira API error.
+ *
+ * There is a single error type — catch `AiraError` and branch on
+ * `e.code` (`"POLICY_DENIED"`, `"INVALID_STATE"`, `"NOT_FOUND"`, ...).
+ * There are no subclasses per error code.
+ */
+export class AiraError extends Error {
+  /** HTTP status code from the backend response. */
+  statusCode: number;
+  /** Error code string (e.g. "POLICY_DENIED", "INVALID_STATE"). */
+  code: string;
+  /** Optional backend-supplied context (policy_id, action_id, etc.). */
+  details: Record<string, unknown>;
+
+  constructor(
+    statusCode: number,
+    code: string,
+    message: string,
+    details: Record<string, unknown> = {},
+  ) {
     super(`[${code}] ${message}`);
     this.name = "AiraError";
-    this.status = status;
+    this.statusCode = statusCode;
     this.code = code;
+    this.details = details;
+  }
+
+  /** Deprecated alias for `statusCode`. Prefer `statusCode`. */
+  get status(): number {
+    return this.statusCode;
   }
 }

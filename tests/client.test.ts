@@ -88,8 +88,30 @@ describe("error handling", () => {
       await aira.getAction("x");
     } catch (e) {
       expect(e).toBeInstanceOf(AiraError);
-      expect((e as AiraError).status).toBe(401);
+      expect((e as AiraError).statusCode).toBe(401);
       expect((e as AiraError).code).toBe("UNAUTHORIZED");
+    }
+  });
+
+  it("exposes details from backend error response", async () => {
+    mockFetch.mockResolvedValue(
+      mockResponse(403, {
+        code: "POLICY_DENIED",
+        error: "Blocked",
+        details: { action_id: "act-1", policy_id: "pol-1" },
+        request_id: "req-1",
+      }),
+    );
+    try {
+      await aira.getAction("x");
+      throw new Error("should have thrown");
+    } catch (e) {
+      expect(e).toBeInstanceOf(AiraError);
+      expect((e as AiraError).code).toBe("POLICY_DENIED");
+      expect((e as AiraError).details).toEqual({
+        action_id: "act-1",
+        policy_id: "pol-1",
+      });
     }
   });
 
@@ -155,7 +177,7 @@ describe("authorize (Step 1)", () => {
       throw new Error("should have thrown");
     } catch (e) {
       expect(e).toBeInstanceOf(AiraError);
-      expect((e as AiraError).status).toBe(403);
+      expect((e as AiraError).statusCode).toBe(403);
       expect((e as AiraError).code).toBe("POLICY_DENIED");
     }
   });
@@ -378,12 +400,15 @@ describe("cosign", () => {
   it("POSTs to /actions/:id/cosign", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(200, {
+        cosignature_id: "cos-1",
+        action_id: "act-1",
         cosigner_email: "manager@example.com",
         cosigned_at: "2026-04-07T00:00:00Z",
-        cosignature_id: "cos-1",
+        request_id: "req-1",
       }),
     );
-    const result = await aira.cosign("act-1");
+    const result = await aira.cosign({ actionId: "act-1" });
+    expect(result.cosignature_id).toBe("cos-1");
     expect(result.cosigner_email).toBe("manager@example.com");
     expect(mockFetch.mock.calls[0][0]).toContain("/actions/act-1/cosign");
     expect(mockFetch.mock.calls[0][1].method).toBe("POST");
