@@ -1,7 +1,7 @@
 {
   "name": "aira-sdk",
   "version": "0.4.0",
-  "description": "TypeScript SDK for Aira — AI governance infrastructure",
+  "description": "The authorization and audit layer for AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
