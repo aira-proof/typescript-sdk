@@ -7,7 +7,7 @@ A lending agent that demonstrates **every feature** of the `aira-sdk` TypeScript
 | # | Feature | Methods Used |
 |---|---------|-------------|
 | 1 | **Agent Registry** | `registerAgent`, `publishVersion`, `updateAgent`, `listAgents`, `getAgent`, `listVersions` |
-| 2 | **Notarization** | `notarize` (with idempotency), chain of custody (`parentActionId`), `getAction`, `getActionChain`, `listActions` |
+| 2 | **Two-Step Flow** | `authorize` + `notarize` (with idempotency), chain of custody (`parentActionId`), `getAction`, `getActionChain`, `listActions` |
 | 3 | **Multi-Model Consensus** | `runCase`, `listCases` |
 | 4 | **Evidence** | `createEvidencePackage`, `listEvidencePackages`, `getEvidencePackage` |
 | 5 | **Estate & Compliance** | `setAgentWill`, `getAgentWill`, `createComplianceSnapshot`, `listComplianceSnapshots` |

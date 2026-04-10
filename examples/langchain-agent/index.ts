@@ -61,32 +61,57 @@ async function main() {
   }
   console.log("   Trust check passed — proceeding.\n");
 
-  // ── 1. Simulate a tool call ──────────────────────────────────────
+  // ── 1. Simulate a tool call with pre-execution gate ─────────────
   // In a real LangChain app, you'd pass `handler.asCallbacks()` to
   // your chain:
   //   const chain = someChain.withConfig({ callbacks: [handler.asCallbacks()] });
   //
-  // Here we call the handler methods directly to show what happens.
+  // Each tool/chain/LLM gets two hooks:
+  //   - handleXxxStart → aira.authorize() — throws on POLICY_DENIED
+  //                       or pending_approval, blocking execution.
+  //   - handleXxxEnd   → aira.notarize() with outcome="completed"
+  //   - handleXxxError → aira.notarize() with outcome="failed"
+  //
+  // Below we drive the handler directly to show each step.
 
-  console.log("1. Tool call: search_docs");
+  console.log("1. Tool call: search_docs (gated)");
   console.log("-".repeat(40));
-  handler.handleToolEnd("Found 3 documents matching 'EU AI Act compliance'", "search_docs");
-  console.log("   Notarized: tool_call for 'search_docs'");
+  const toolRun = "demo-run-search";
+  try {
+    await handler.handleToolStart({ name: "search_docs" }, "EU AI Act compliance", toolRun);
+    console.log("   ✓ Authorized — tool can run");
+    // ... tool executes here ...
+    await handler.handleToolEnd(
+      "Found 3 documents matching 'EU AI Act compliance'",
+      toolRun,
+      "search_docs",
+    );
+    console.log("   ✓ Notarized: tool completed");
+  } catch (e) {
+    console.log(`   ✗ Blocked: ${(e as Error).message}`);
+  }
 
-  // ── 2. Simulate a chain completion ───────────────────────────────
-  console.log("\n2. Chain completion");
+  // ── 2. Simulate a chain run ──────────────────────────────────────
+  console.log("\n2. Chain run");
   console.log("-".repeat(40));
-  handler.handleChainEnd({
-    output: "Analysis complete: 3 documents reviewed, 2 compliance gaps found",
-    sources: ["doc_1", "doc_2", "doc_3"],
-  });
-  console.log("   Notarized: chain_completed with output keys [output, sources]");
+  const chainRun = "demo-run-chain";
+  await handler.handleChainStart({ name: "compliance-analysis" }, { query: "EU AI Act" }, chainRun);
+  await handler.handleChainEnd(
+    {
+      output: "Analysis complete: 3 documents reviewed, 2 compliance gaps found",
+      sources: ["doc_1", "doc_2", "doc_3"],
+    },
+    chainRun,
+  );
+  console.log("   ✓ Notarized: chain_run completed");
 
-  // ── 3. Simulate an LLM generation ───────────────────────────────
-  console.log("\n3. LLM generation");
+  // ── 3. Simulate an LLM run ──────────────────────────────────────
+  console.log("\n3. LLM run");
   console.log("-".repeat(40));
-  handler.handleLLMEnd(2);
-  console.log("   Notarized: llm_completion with 2 generations");
+  const llmRun = "demo-run-llm";
+  await handler.handleLLMStart({}, ["Summarize the findings"], llmRun);
+  await handler.handleLLMEnd({ generations: [1, 2] }, llmRun);
+  console.log("   ✓ Notarized: llm_run completed");
 
   // ── 4. Verify the trail ──────────────────────────────────────────
   // Give the async notarizations a moment to complete.
@@ -99,11 +124,10 @@ async function main() {
 
   if (actions.data.length > 0) {
     const latest = actions.data[0];
-    console.log(`   Latest action: ${(latest as Record<string, unknown>).action_type}`);
-    const actionId = (latest as Record<string, unknown>).action_id as string;
+    console.log(`   Latest action: ${latest.action_type}`);
 
     // Cryptographic verification — public, no auth needed
-    const verify = await aira.verifyAction(actionId);
+    const verify = await aira.verifyAction(latest.action_id);
     console.log(`   Valid: ${verify.valid}`);
     console.log(`   Signature key: ${verify.public_key_id}`);
     console.log(`   Receipt: ${verify.message.slice(0, 60)}...`);

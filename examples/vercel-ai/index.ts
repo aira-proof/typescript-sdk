@@ -34,36 +34,39 @@ async function main() {
   console.log("  Aira + Vercel AI SDK — Notarization Demo");
   console.log("=".repeat(60) + "\n");
 
-  // ── 1. Simulate a tool call + result ─────────────────────────────
-  // In a real app, use middleware.wrapTool() to auto-notarize:
-  //
-  //   const wrappedSearch = middleware.wrapTool(searchFn, "web_search");
-  //   const result = await wrappedSearch({ query: "..." });
-  //
-  // Here we call the methods directly to demonstrate.
-
-  console.log("1. Tool call: web_search");
+  // ── 1. wrapTool() — real authorization gate ─────────────────────
+  // `wrapTool()` is the REAL gate: it calls authorize() before the tool
+  // runs (blocking on POLICY_DENIED or pending_approval) and notarize()
+  // after. This is the recommended integration point for Vercel AI.
+  console.log("1. Tool call via wrapTool() (gated)");
   console.log("-".repeat(40));
-  middleware.onToolCall("web_search", ["query", "max_results"]);
-  console.log("   Notarized: tool_call for 'web_search'");
 
-  middleware.onToolResult("web_search", 1250);
-  console.log("   Notarized: tool_completed (1250 chars result)");
+  const rawSearch = async (...args: unknown[]): Promise<string> => {
+    const q = (args[0] as { query: string }).query;
+    return `Found 7 results for '${q}'`;
+  };
+  const webSearch = middleware.wrapTool(rawSearch, "web_search");
 
-  // ── 2. Simulate step completion ──────────────────────────────────
-  console.log("\n2. Step completion");
+  try {
+    const result = await webSearch({ query: "EU AI Act Article 12" });
+    console.log(`   ✓ Gated + notarized: ${String(result).slice(0, 60)}...`);
+  } catch (e) {
+    console.log(`   ✗ Blocked: ${(e as Error).message}`);
+  }
+
+  // ── 2. onStepFinish / onFinish — AUDIT-ONLY callbacks ───────────
+  // These fire AFTER the step/generation has run. They cannot gate
+  // execution — they produce a post-hoc audit receipt.
+  console.log("\n2. Post-hoc audit (onStepFinish / onFinish)");
   console.log("-".repeat(40));
   middleware.onStepFinish("tool-result", 340);
-  console.log("   Notarized: step_completed (tool-result, 340 tokens)");
+  console.log("   Audit: step_completed (tool-result, 340 tokens)");
 
   middleware.onStepFinish("text-delta", 128);
-  console.log("   Notarized: step_completed (text-delta, 128 tokens)");
+  console.log("   Audit: step_completed (text-delta, 128 tokens)");
 
-  // ── 3. Simulate full generation completion ───────────────────────
-  console.log("\n3. Generation completed");
-  console.log("-".repeat(40));
   middleware.onFinish("stop", 468);
-  console.log("   Notarized: generation_completed (stop, 468 total tokens)");
+  console.log("   Audit: generation_completed (stop, 468 total tokens)");
 
   // ── 4. Verify the trail ──────────────────────────────────────────
   await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -75,16 +78,14 @@ async function main() {
 
   if (actions.data.length > 0) {
     const latest = actions.data[0];
-    const actionId = (latest as Record<string, unknown>).action_id as string;
-
-    const verify = await aira.verifyAction(actionId);
+    const verify = await aira.verifyAction(latest.action_id);
     console.log(`   Valid: ${verify.valid}`);
     console.log(`   Signature key: ${verify.public_key_id}`);
     console.log(`   Receipt: ${verify.message.slice(0, 60)}...`);
   }
 
   console.log("\n" + "=".repeat(60));
-  console.log("  Done — 5 actions notarized with cryptographic receipts");
+  console.log("  Done — 1 gated tool + 3 audit events notarized");
   console.log("=".repeat(60) + "\n");
 }
 

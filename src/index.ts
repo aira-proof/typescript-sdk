@@ -5,10 +5,12 @@ export { OfflineQueue } from "./offline";
 export type { QueuedRequest } from "./offline";
 export {
   AiraError,
+  type Authorization,
   type ActionReceipt,
   type ActionDetail,
   type AgentDetail,
   type AgentVersion,
+  type CosignResult,
   type EvidencePackage,
   type ComplianceSnapshot,
   type EscrowAccount,

@@ -1,14 +1,22 @@
 # Aira MCP Server — Model Context Protocol Integration
 
-Demonstrates how to expose Aira's notarization, verification, and receipt retrieval as MCP tools that any AI agent (Claude Desktop, Cursor, etc.) can discover and call.
+Demonstrates how to expose Aira's two-step flow, verification, and trust
+layer as MCP tools that any AI agent (Claude Desktop, Cursor, etc.) can
+discover and call.
 
 ## MCP Tools Exposed
 
 | Tool | Description |
 |------|-------------|
-| `notarize_action` | Create a cryptographic receipt for any agent action |
+| `authorize_action` | Step 1 — authorize an action BEFORE it runs |
+| `notarize_action` | Step 2 — notarize the outcome, returns a signed receipt |
+| `get_action` | Retrieve full action details and receipt |
 | `verify_action` | Verify a receipt's Ed25519 signature |
 | `get_receipt` | Retrieve a full receipt by ID |
+| `resolve_did` | Resolve a did:web DID to its DID document |
+| `verify_credential` | Verify an agent's Verifiable Credential |
+| `get_reputation` | Get an agent's reputation score |
+| `request_mutual_sign` | Initiate mutual notarization with a counterparty |
 
 ## Setup
 

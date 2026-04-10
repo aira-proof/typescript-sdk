@@ -74,13 +74,16 @@ async function main() {
   console.log();
 
   // ══════════════════════════════════════════════════════════
-  // 2. NOTARIZATION
+  // 2. TWO-STEP FLOW: authorize → execute → notarize
   // ══════════════════════════════════════════════════════════
 
-  console.log("2. Action Notarization");
+  console.log("2. Authorize → Execute → Notarize");
   console.log("-".repeat(40));
 
-  const receipt = await aira.notarize({
+  // Step 1 — ask Aira whether the action is allowed. If a policy denies
+  // it we get an AiraError with POLICY_DENIED; if it needs human review
+  // we get status="pending_approval" and must wait.
+  const auth = await aira.authorize({
     actionType: "loan_decision",
     details: JSON.stringify({
       applicant: "Maria Schmidt",
@@ -92,17 +95,37 @@ async function main() {
     modelId: MODEL_ID,
     idempotencyKey: `loan-maria-ts-${Date.now()}`,
   });
+  console.log(`   ✓ Authorized: ${auth.action_id.slice(0, 16)}...  (${auth.status})`);
+
+  if (auth.status !== "authorized") {
+    console.log("   ⚠ Action is pending human approval — skipping execution.");
+    return;
+  }
+
+  // ... agent executes the action here (write to DB, call partner API, etc.) ...
+
+  // Step 2 — notarize the outcome. Returns the Ed25519-signed receipt.
+  const receipt = await aira.notarize({
+    actionId: auth.action_id,
+    outcome: "completed",
+    outcomeDetails: "Loan approved and booked in core system",
+  });
   console.log(`   ✓ Notarized: ${receipt.action_id.slice(0, 16)}...`);
-  console.log(`   ✓ Signature: ${receipt.signature.slice(0, 30)}...`);
+  console.log(`   ✓ Signature: ${(receipt.signature ?? "").slice(0, 30)}...`);
   const actionIds = [receipt.action_id];
 
-  // Chain of custody
-  const emailReceipt = await aira.notarize({
+  // Chain of custody — each follow-up action references its parent.
+  const emailAuth = await aira.authorize({
     actionType: "email_sent",
     details: JSON.stringify({ to: "maria@example.de", subject: "Loan Approved" }),
     agentId: AGENT_SLUG,
     modelId: MODEL_ID,
-    parentActionId: receipt.action_id,
+    parentActionId: auth.action_id,
+  });
+  const emailReceipt = await aira.notarize({
+    actionId: emailAuth.action_id,
+    outcome: "completed",
+    outcomeDetails: "Email delivered (message_id=abc123)",
   });
   console.log(`   ✓ Chained: ${emailReceipt.action_id.slice(0, 16)}...`);
   actionIds.push(emailReceipt.action_id);
