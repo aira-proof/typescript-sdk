@@ -77,13 +77,13 @@ describe("Aira constructor", () => {
 
 describe("error handling", () => {
   it("throws AiraError on 400", async () => {
-    mockFetch.mockResolvedValue(mockResponse(400, { code: "VALIDATION", error: "Bad request" }));
+    mockFetch.mockResolvedValue(mockResponse(400, { code: "VALIDATION", message: "Bad request" }));
     await expect(aira.getAction("x")).rejects.toThrow(AiraError);
     await expect(aira.getAction("x")).rejects.toThrow("[VALIDATION] Bad request");
   });
 
   it("throws AiraError on 401", async () => {
-    mockFetch.mockResolvedValue(mockResponse(401, { code: "UNAUTHORIZED", error: "Invalid token" }));
+    mockFetch.mockResolvedValue(mockResponse(401, { code: "UNAUTHORIZED", message: "Invalid token" }));
     try {
       await aira.getAction("x");
     } catch (e) {
@@ -97,7 +97,7 @@ describe("error handling", () => {
     mockFetch.mockResolvedValue(
       mockResponse(403, {
         code: "POLICY_DENIED",
-        error: "Blocked",
+        message: "Blocked",
         details: { action_id: "act-1", policy_id: "pol-1" },
         request_id: "req-1",
       }),
@@ -116,7 +116,7 @@ describe("error handling", () => {
   });
 
   it("throws AiraError on 500", async () => {
-    mockFetch.mockResolvedValue(mockResponse(500, { code: "INTERNAL", error: "Server error" }));
+    mockFetch.mockResolvedValue(mockResponse(500, { code: "INTERNAL", message: "Server error" }));
     await expect(aira.getAction("x")).rejects.toThrow(AiraError);
   });
 });
@@ -169,7 +169,7 @@ describe("authorize (Step 1)", () => {
 
   it("throws POLICY_DENIED as AiraError", async () => {
     mockFetch.mockResolvedValue(
-      mockResponse(403, { code: "POLICY_DENIED", error: "Blocked by policy 'Wire transfers'" }),
+      mockResponse(403, { code: "POLICY_DENIED", message: "Blocked by policy 'Wire transfers'" }),
     );
 
     try {
@@ -184,7 +184,7 @@ describe("authorize (Step 1)", () => {
 
   it("throws DUPLICATE_REQUEST on 409", async () => {
     mockFetch.mockResolvedValue(
-      mockResponse(409, { code: "DUPLICATE_REQUEST", error: "Idempotency key already used" }),
+      mockResponse(409, { code: "DUPLICATE_REQUEST", message: "Idempotency key already used" }),
     );
 
     await expect(
@@ -305,7 +305,7 @@ describe("notarize (Step 2)", () => {
 
   it("throws on invalid state transition (e.g. double-notarize)", async () => {
     mockFetch.mockResolvedValue(
-      mockResponse(409, { code: "INVALID_STATE", error: "Action already notarized" }),
+      mockResponse(409, { code: "INVALID_STATE", message: "Action already notarized" }),
     );
 
     await expect(
@@ -315,7 +315,7 @@ describe("notarize (Step 2)", () => {
 
   it("throws when notarizing unauthorized action", async () => {
     mockFetch.mockResolvedValue(
-      mockResponse(404, { code: "NOT_FOUND", error: "Action not found" }),
+      mockResponse(404, { code: "NOT_FOUND", message: "Action not found" }),
     );
 
     await expect(aira.notarize({ actionId: "missing" })).rejects.toThrow(AiraError);

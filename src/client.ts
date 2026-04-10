@@ -64,10 +64,7 @@ export class Aira {
       const data = (await res.json().catch(() => ({ error: res.statusText, code: "UNKNOWN" }))) as Record<string, unknown>;
 
       if (!res.ok) {
-        // Backend returns the human-readable text under "error"; the spec
-        // refers to it as ``message`` on the SDK side.
-        const message =
-          (data.message as string) ?? (data.error as string) ?? res.statusText;
+        const message = (data.message as string) ?? res.statusText;
         throw new AiraError(
           res.status,
           (data.code as string) ?? "UNKNOWN",

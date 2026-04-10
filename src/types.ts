@@ -204,9 +204,4 @@ export class AiraError extends Error {
     this.code = code;
     this.details = details;
   }
-
-  /** Deprecated alias for `statusCode`. Prefer `statusCode`. */
-  get status(): number {
-    return this.statusCode;
-  }
 }
