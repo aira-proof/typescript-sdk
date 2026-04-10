@@ -1,5 +1,5 @@
 import {
-  ActionReceipt, ActionDetail, AgentDetail, AgentVersion,
+  Authorization, ActionReceipt, ActionDetail, AgentDetail, AgentVersion,
   EvidencePackage, ComplianceSnapshot, EscrowAccount, EscrowTransaction,
   VerifyResult, PaginatedList, AiraError,
 } from "./types";
@@ -112,37 +112,70 @@ export class Aira {
     return { data: data.data as T[], total: p.total, page: p.page, per_page: p.per_page, has_more: p.has_more };
   }
 
-  // ==================== Actions ====================
+  // ==================== Actions (two-step: authorize → notarize) ====================
 
-  async notarize(params: {
+  /**
+   * Step 1 — Authorize an action BEFORE it executes.
+   *
+   * Returns an `Authorization` with a status:
+   *  - "authorized"       → safe to execute the action, then call `notarize()`
+   *  - "pending_approval" → enqueue `action_id` and wait for human approval
+   *
+   * If a policy denies the action, this throws `AiraError` with code
+   * `POLICY_DENIED` (HTTP 403). Duplicate idempotent requests throw
+   * `DUPLICATE_REQUEST` (HTTP 409).
+   */
+  async authorize(params: {
     actionType: string;
     details: string;
     agentId?: string;
     agentVersion?: string;
+    instructionHash?: string;
     modelId?: string;
     modelVersion?: string;
-    instructionHash?: string;
     parentActionId?: string;
+    endpointUrl?: string;
     storeDetails?: boolean;
     idempotencyKey?: string;
     requireApproval?: boolean;
     approvers?: string[];
-  }): Promise<ActionReceipt> {
+  }): Promise<Authorization> {
     const body = buildBody({
       action_type: params.actionType,
       details: truncateDetails(params.details),
       agent_id: params.agentId,
       agent_version: params.agentVersion,
+      instruction_hash: params.instructionHash,
       model_id: params.modelId,
       model_version: params.modelVersion,
-      instruction_hash: params.instructionHash,
       parent_action_id: params.parentActionId,
+      endpoint_url: params.endpointUrl,
       store_details: params.storeDetails || undefined,
       idempotency_key: params.idempotencyKey,
       require_approval: params.requireApproval || undefined,
       approvers: params.approvers,
     });
-    return this.post<ActionReceipt>("/actions", body);
+    return this.post<Authorization>("/actions", body);
+  }
+
+  /**
+   * Step 2 — Notarize the outcome of an already-authorized action.
+   *
+   * Call this AFTER executing the action. Outcome is "completed" by default;
+   * pass "failed" if the action ran but failed so the audit trail captures
+   * the failure. The returned `ActionReceipt` carries the Ed25519 signature
+   * and RFC 3161 timestamp token when the status is "notarized".
+   */
+  async notarize(params: {
+    actionId: string;
+    outcome?: "completed" | "failed";
+    outcomeDetails?: string;
+  }): Promise<ActionReceipt> {
+    const body = buildBody({
+      outcome: params.outcome ?? "completed",
+      outcome_details: params.outcomeDetails,
+    });
+    return this.post<ActionReceipt>(`/actions/${params.actionId}/notarize`, body);
   }
 
   async getAction(actionId: string): Promise<ActionDetail> {
@@ -156,8 +189,13 @@ export class Aira {
     return this.paginated<ActionDetail>(data);
   }
 
-  async authorizeAction(actionId: string): Promise<Record<string, unknown>> {
-    return this.post(`/actions/${actionId}/authorize`, {});
+  /**
+   * Add a human co-signature to an authorized action.
+   *
+   * Returns `{ cosigner_email, cosigned_at, cosignature_id }`.
+   */
+  async cosign(actionId: string): Promise<Record<string, unknown>> {
+    return this.post(`/actions/${actionId}/cosign`, {});
   }
 
   async setLegalHold(actionId: string): Promise<Record<string, unknown>> {

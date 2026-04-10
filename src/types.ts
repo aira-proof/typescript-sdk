@@ -1,23 +1,36 @@
-/** Cryptographic receipt from notarizing an action. */
-export interface ActionReceipt {
+/**
+ * Authorization result from `authorize()` — Step 1 of the two-step flow.
+ *
+ * Status tells you what to do next:
+ *  - "authorized"       → execute the action, then call `notarize()`
+ *  - "pending_approval" → enqueue the action_id and wait for human approval
+ *
+ * POLICY_DENIED is raised as an `AiraError` — not returned as a status.
+ */
+export interface Authorization {
   action_id: string;
-  receipt_id?: string;
-  payload_hash?: string;
-  signature?: string;
-  timestamp_token?: string | null;
+  status: "authorized" | "pending_approval";
   created_at: string;
   request_id: string;
-  status?: string;
-  action_type?: string;
-  agent_id?: string | null;
-  warnings?: string[] | null;
-  policy_evaluation?: {
-    policy_id: string;
-    policy_name: string;
-    decision: string;
-    reasoning: string | null;
-    confidence: number | null;
-  } | null;
+  warnings: string[] | null;
+}
+
+/**
+ * Cryptographic receipt from notarizing an action — Step 2 of the two-step flow.
+ *
+ * Only populated when `status === "notarized"`. For "failed" outcomes,
+ * the receipt fields stay null — only the audit trail is recorded.
+ */
+export interface ActionReceipt {
+  action_id: string;
+  status: "notarized" | "failed";
+  created_at: string;
+  request_id: string;
+  receipt_id: string | null;
+  payload_hash: string | null;
+  signature: string | null;
+  timestamp_token: string | null;
+  warnings: string[] | null;
 }
 
 /** Full action details including receipt and authorizations. */

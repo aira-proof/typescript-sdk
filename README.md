@@ -21,25 +21,50 @@ npm install aira-sdk @openai/agents # for OpenAI Agents
 
 ## Quick Start
 
-Every call to `notarize()` returns a cryptographic receipt -- Ed25519-signed, timestamped, tamper-proof.
+Aira uses a **two-step flow**: `authorize()` BEFORE the action runs,
+`notarize()` AFTER. This lets you block disallowed actions before they have
+any real-world effect, and still produce a cryptographic receipt once the
+action has completed.
 
 ```typescript
-import { Aira } from "aira-sdk";
+import { Aira, AiraError } from "aira-sdk";
 
 const aira = new Aira({ apiKey: "aira_live_xxx" });
 
-const receipt = await aira.notarize({
-  actionType: "email_sent",
-  details: "Sent onboarding email to customer@example.com",
-  agentId: "support-agent",
-  modelId: "claude-sonnet-4-6",
-  instructionHash: "sha256:a1b2c3...",
-});
+try {
+  // Step 1 — ask Aira whether the action is allowed.
+  const auth = await aira.authorize({
+    actionType: "wire_transfer",
+    details: "Send €75K to vendor X",
+    agentId: "payments-agent",
+  });
 
-console.log(receipt.payload_hash);   // sha256:e5f6a7b8...
-console.log(receipt.signature);       // ed25519:base64url...
-console.log(receipt.action_id);       // uuid — publicly verifiable
+  if (auth.status === "authorized") {
+    // Step 2a — execute the action, then notarize the outcome.
+    const result = await sendWire(75_000, "vendor");
+    await aira.notarize({
+      actionId: auth.action_id,
+      outcome: "completed",
+      outcomeDetails: `Sent. ref=${result.id}`,
+    });
+  } else if (auth.status === "pending_approval") {
+    // Step 2b — enqueue for the approver flow; do NOT execute.
+    await queue.enqueue(auth.action_id);
+  }
+} catch (e) {
+  // Step 2c — a policy denied the action. Nothing to execute, nothing to
+  // notarize. POLICY_DENIED is thrown, never returned as a status.
+  if (e instanceof AiraError && e.code === "POLICY_DENIED") {
+    console.log(`Blocked: ${e.message}`);
+  } else {
+    throw e;
+  }
+}
 ```
+
+The returned `ActionReceipt` carries the Ed25519 signature and RFC 3161
+timestamp token. If you pass `outcome: "failed"`, the backend still writes
+an audit entry but leaves `signature` / `receipt_id` null.
 
 ---
 
@@ -49,10 +74,11 @@ All 52 methods on `Aira`. Every write operation produces a cryptographic receipt
 
 | Category | Method | Description |
 |---|---|---|
-| **Actions** | `notarize()` | Notarize an action -- returns Ed25519-signed receipt (supports `requireApproval`) |
+| **Actions** | `authorize()` | Step 1 — authorize an action BEFORE it runs (throws POLICY_DENIED) |
+| | `notarize()` | Step 2 — notarize the outcome, returns Ed25519-signed receipt |
 | | `getAction()` | Retrieve action details + receipt |
 | | `listActions()` | List actions with filters (type, agent, status) |
-| | `authorizeAction()` | Human co-signature on high-stakes action |
+| | `cosign()` | Human co-signature on a high-stakes action |
 | | `setLegalHold()` | Prevent deletion -- litigation hold |
 | | `releaseLegalHold()` | Release litigation hold |
 | | `getActionChain()` | Chain of custody for an action |
@@ -165,37 +191,35 @@ console.log(rep.tier);   // "Verified"
 
 ### Endpoint Verification
 
-Control which external APIs your agents can call. When `endpointUrl` is passed to `notarize()`, Aira checks it against your org's whitelist. Unrecognized endpoints are blocked in strict mode.
-
-#### Notarize with endpointUrl
-
-```typescript
-const receipt = await aira.notarize({
-  actionType: "api_call",
-  details: "Charged customer $49.99 for subscription renewal",
-  agentId: "billing-agent",
-  modelId: "claude-sonnet-4-6",
-  endpointUrl: "https://api.stripe.com/v1/charges",
-});
-```
-
-#### Handle ENDPOINT_NOT_WHITELISTED
+Control which external APIs your agents can call. When `endpointUrl` is
+passed to `authorize()`, Aira checks it against your org's whitelist
+before returning. Unrecognized endpoints throw `ENDPOINT_NOT_WHITELISTED`
+in strict mode — the action is never authorized and you never need to
+call `notarize()`.
 
 ```typescript
 import { Aira, AiraError } from "aira-sdk";
 
 try {
-  const receipt = await aira.notarize({
+  const auth = await aira.authorize({
     actionType: "api_call",
-    details: "Send SMS via new provider",
-    agentId: "notifications-agent",
-    endpointUrl: "https://api.newprovider.com/v1/sms",
+    details: "Charged customer $49.99 for subscription renewal",
+    agentId: "billing-agent",
+    modelId: "claude-sonnet-4-6",
+    endpointUrl: "https://api.stripe.com/v1/charges",
   });
+
+  if (auth.status === "authorized") {
+    const result = await stripe.charges.create({ amount: 4999, /* ... */ });
+    await aira.notarize({
+      actionId: auth.action_id,
+      outcome: "completed",
+      outcomeDetails: `Charged ${result.id}`,
+    });
+  }
 } catch (e) {
   if (e instanceof AiraError && e.code === "ENDPOINT_NOT_WHITELISTED") {
     console.log(`Blocked: ${e.message}`);
-    console.log(`Approval request: ${e.details.approval_id}`);
-    console.log(`Suggested pattern: ${e.details.url_pattern_suggested}`);
   } else {
     throw e;
   }
@@ -225,68 +249,90 @@ const handler = new AiraCallbackHandler(aira, "research-agent", {
 
 ## Session
 
-Pre-fill defaults for a block of related actions. Every `notarize()` call within the session inherits the agent identity, producing receipts that share a common provenance chain.
+Pre-fill defaults for a block of related actions. Every `authorize()` call
+within the session inherits the agent identity, producing receipts that
+share a common provenance chain.
 
 ```typescript
 const sess = aira.session("onboarding-agent", { modelId: "claude-sonnet-4-6" });
 
-await sess.notarize({ actionType: "identity_verified", details: "Verified customer ID #4521" });
-await sess.notarize({ actionType: "account_created", details: "Created account for customer #4521" });
-await sess.notarize({ actionType: "welcome_sent", details: "Sent welcome email to customer #4521" });
+async function notarize(actionType: string, details: string) {
+  const auth = await sess.authorize({ actionType, details });
+  if (auth.status === "authorized") {
+    await sess.notarize({ actionId: auth.action_id, outcome: "completed" });
+  }
+}
+
+await notarize("identity_verified", "Verified customer ID #4521");
+await notarize("account_created", "Created account for customer #4521");
+await notarize("welcome_sent", "Sent welcome email to customer #4521");
 ```
 
 ---
 
 ## Offline Mode
 
-Queue notarizations locally when connectivity is unavailable. Cryptographic receipts are generated server-side when you sync -- nothing is lost.
+Queue `authorize()` calls locally when connectivity is unavailable. On
+`sync()`, the backend runs the real authorizations and returns their
+results. The agent can then call `notarize()` per action to close the loop.
 
 ```typescript
 const aira = new Aira({ apiKey: "aira_live_xxx", offline: true });
 
 // These queue locally — no network calls
-await aira.notarize({ actionType: "scan_completed", details: "Scanned document batch #77" });
-await aira.notarize({ actionType: "classification_done", details: "Classified 142 documents" });
+await aira.authorize({ actionType: "scan_completed", details: "Scanned document batch #77" });
+await aira.authorize({ actionType: "classification_done", details: "Classified 142 documents" });
 
 console.log(aira.pendingCount);  // 2
 
-// Flush to API when back online — receipts are generated for each action
+// Flush to the API when back online — returns the Authorization for each
+// queued request. Use the action_ids to notarize outcomes afterwards.
 const results = await aira.sync();
 ```
+
+Offline mode is intended for actions the agent will execute regardless of
+Aira's decision (sensor reads, local scans). For actions whose execution
+depends on the authorization result, run the SDK online.
 
 ---
 
 ## Human Approval
 
-Hold high-stakes actions for human review before the cryptographic receipt is issued. Approvers receive an email with Approve/Deny buttons.
+Hold high-stakes actions for human review before they execute. Approvers
+receive an email with Approve/Deny buttons. If the action is held, the SDK
+returns `status: "pending_approval"` from `authorize()` and the agent must
+enqueue the `action_id` instead of executing.
 
 ```typescript
-const receipt = await aira.notarize({
+const auth = await aira.authorize({
   actionType: "loan_decision",
-  details: "Approved €15,000 loan for Maria Schmidt",
+  details: "Approve €15,000 loan for Maria Schmidt",
   agentId: "lending-agent",
   requireApproval: true,
   approvers: ["compliance@acme.com", "risk@acme.com"],
 });
-console.log(receipt.status);      // "pending_approval"
-console.log(receipt.receipt_id);  // undefined — no receipt until approved
 
-// Falls back to org default approvers (Settings → Approvers)
-const receipt2 = await aira.notarize({
-  actionType: "wire_transfer",
-  details: "Transfer $50,000 to vendor account",
-  agentId: "payments-agent",
-  requireApproval: true,
-});
+if (auth.status === "pending_approval") {
+  // Do NOT execute the action. Store action_id and wait for the
+  // action.approved webhook, then execute + notarize.
+  await queue.enqueue(auth.action_id);
+}
 ```
 
-The approver clicks "Approve" in the email → receipt is minted with Ed25519 signature + RFC 3161 timestamp → `action.approved` webhook fires.
+The approver clicks "Approve" in the email → the action transitions to
+`authorized` → `action.approved` webhook fires → your handler executes the
+action and calls `aira.notarize({ actionId, outcome: "completed" })`.
 
-Configure default approvers in the [dashboard](https://app.airaproof.com/dashboard/settings/approvers) or via the `/approvers` API.
+Configure default approvers in the [dashboard](https://app.airaproof.com/dashboard/settings/approvers).
 
 ### Automatic Policy Evaluation
 
-Org admins configure policies in the dashboard — your code doesn't change. Every `notarize()` call is automatically evaluated against active policies before the receipt is issued.
+Org admins configure policies in the dashboard — your code doesn't change.
+Every `authorize()` call is automatically evaluated against active policies
+before returning. If a policy denies the action, the SDK throws
+`AiraError` with code `POLICY_DENIED` and the action is never persisted as
+authorized. If a policy forces human review, `status` is
+`pending_approval`. Otherwise `status` is `authorized`.
 
 Three evaluation modes:
 
@@ -295,29 +341,21 @@ Three evaluation modes:
 - **Consensus**: Multiple LLMs evaluate independently — disagreement triggers human review (3-10s)
 
 ```typescript
-// Your code stays the same — policies evaluate automatically
-const receipt = await aira.notarize({
-  actionType: "wire_transfer",
-  details: "Transfer $50,000 to vendor account",
-  agentId: "billing-agent",
-});
-
-// If a policy triggers "require_approval":
-console.log(receipt.status);             // "pending_approval"
-console.log(receipt.policy_evaluation);  // { policy_name: "Wire transfers need approval", decision: "require_approval", ... }
-
-// If a policy triggers "deny":
 import { AiraError } from "aira-sdk";
+
 try {
-  await aira.notarize({ actionType: "data_deletion", details: "Delete customer records" });
+  const auth = await aira.authorize({
+    actionType: "data_deletion",
+    details: "Delete customer records",
+    agentId: "support-agent",
+  });
+  // ... execute + notarize ...
 } catch (e) {
   if (e instanceof AiraError && e.code === "POLICY_DENIED") {
     console.log(e.message);  // "Action denied by policy 'Block deletions': ..."
   }
 }
 ```
-
-Every policy evaluation produces a cryptographic receipt — proof the policy was checked. The SDK `requireApproval: true` override still works and skips policy evaluation entirely.
 
 Configure policies at [Settings → Policies](https://app.airaproof.com/dashboard/policies).
 
@@ -337,67 +375,105 @@ Drop Aira into your existing agent framework with one import:
 
 ### LangChain.js
 
-`AiraCallbackHandler` notarizes every tool call, chain completion, and LLM invocation with a cryptographic receipt. No changes to your chain logic.
+`AiraCallbackHandler` runs the two-step flow on every tool, chain, and LLM
+event. The `Start` callbacks call `authorize()` — if a policy denies the
+action or flags it for human review, LangChain aborts the step. The `End`
+and `Error` callbacks call `notarize()` with the appropriate outcome. This
+is a **real authorization gate**, not just post-hoc audit logging.
 
 ```typescript
 import { Aira } from "aira-sdk";
 import { AiraCallbackHandler } from "aira-sdk/extras/langchain";
 
 const aira = new Aira({ apiKey: "aira_live_xxx" });
-const handler = new AiraCallbackHandler({ client: aira, agentId: "research-agent", modelId: "gpt-5.2" });
+const handler = new AiraCallbackHandler(aira, "research-agent", {
+  modelId: "gpt-5.2",
+  strict: false, // fail-open on network errors; set true to fail-closed
+});
 
-// Every tool call and chain completion gets a signed receipt
-const result = await chain.invoke({ input: "Analyze Q1 revenue" }, { callbacks: [handler] });
+const result = await chain.invoke(
+  { input: "Analyze Q1 revenue" },
+  { callbacks: [handler.asCallbacks()] },
+);
 ```
 
 ### Vercel AI
 
-`AiraVercelMiddleware` wraps your Vercel AI `streamText` / `generateText` calls so every model invocation is notarized with a tamper-proof receipt.
+`AiraVercelMiddleware` exposes two integration points:
+
+- **`wrapTool()`** — the real authorization gate. Calls `authorize()`
+  before the tool runs, notarizes the outcome afterwards. Use this for any
+  tool that touches the outside world.
+- **`onStepFinish` / `onFinish`** — post-hoc audit callbacks. These fire
+  after the step has run and cannot gate execution. Useful for logging
+  generation metadata.
 
 ```typescript
 import { Aira } from "aira-sdk";
 import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai";
+import { tool } from "ai";
+import { z } from "zod";
 
 const aira = new Aira({ apiKey: "aira_live_xxx" });
-const middleware = new AiraVercelMiddleware({ client: aira, agentId: "assistant-agent" });
+const middleware = new AiraVercelMiddleware(aira, "assistant-agent");
 
-// Wrap your Vercel AI calls — receipts at invocation and completion
-const result = await middleware.wrapGenerateText({
+const webSearch = tool({
+  description: "Search the web",
+  parameters: z.object({ query: z.string() }),
+  execute: middleware.wrapTool(async ({ query }) => {
+    return await search(query);
+  }, "web_search"),
+});
+
+const result = await generateText({
   model: openai("gpt-5.2"),
-  prompt: "Summarize the contract terms",
+  prompt: "Find today's EU AI Act news",
+  tools: { webSearch },
+  ...middleware.asCallbacks(),
 });
 ```
 
 ### OpenAI Agents SDK
 
-`AiraGuardrail` wraps any tool function to automatically notarize both invocation and result with cryptographic proof.
+`AiraGuardrail.wrapTool()` gates every tool invocation through Aira's
+two-step flow: `authorize()` runs first and can block the tool on
+`POLICY_DENIED` or `pending_approval`, then `notarize()` closes the loop
+after the tool returns. Only tool names and arg keys are sent — raw user
+input stays in your process.
 
 ```typescript
 import { Aira } from "aira-sdk";
 import { AiraGuardrail } from "aira-sdk/extras/openai-agents";
 
 const aira = new Aira({ apiKey: "aira_live_xxx" });
-const guardrail = new AiraGuardrail({ client: aira, agentId: "assistant-agent" });
+const guardrail = new AiraGuardrail(aira, "assistant-agent");
 
-// Wrap tools — every call and result gets a signed receipt
-const search = guardrail.wrapTool(searchTool, { toolName: "web_search" });
-const execute = guardrail.wrapTool(codeExecutor, { toolName: "code_exec" });
+const search = guardrail.wrapTool(searchTool, "web_search");
+const execute = guardrail.wrapTool(codeExecutor, "code_exec");
 ```
 
 ---
 
 ## MCP Server
 
-Expose Aira as an MCP tool server. Any MCP-compatible AI agent can notarize actions and verify receipts without SDK integration.
+Expose Aira as an MCP tool server. Any MCP-compatible AI agent can run the
+two-step flow and verify receipts without a direct SDK dependency.
 
 ```typescript
+import { Aira } from "aira-sdk";
 import { createServer } from "aira-sdk/extras/mcp";
 
-const server = createServer({ apiKey: "aira_live_xxx" });
-server.listen(); // stdio transport
+const aira = new Aira({ apiKey: "aira_live_xxx" });
+const { listTools, callTool } = createServer(aira);
+// Wire into @modelcontextprotocol/sdk's Server.
 ```
 
-The server exposes three tools: `notarize_action`, `verify_action`, and `get_receipt` -- each producing cryptographically signed results.
+The server exposes the two-step flow as explicit tools:
+`authorize_action`, `notarize_action`, `get_action`, `verify_action`,
+`get_receipt`, plus trust-layer helpers. An MCP client is expected to call
+`authorize_action` before performing a side effect and `notarize_action`
+after — the MCP protocol has no hidden hook point, so the authorization
+gate only exists if the agent cooperates with the contract.
 
 Add to your MCP client config:
 
@@ -447,17 +523,23 @@ Supported event types: `action.notarized`, `action.authorized`, `agent.registere
 import { Aira, AiraError } from "aira-sdk";
 
 try {
-  await aira.notarize({ actionType: "test", details: "test" });
+  const auth = await aira.authorize({ actionType: "test", details: "test" });
+  // ...
 } catch (e) {
   if (e instanceof AiraError) {
-    console.log(e.status);   // 429
-    console.log(e.code);     // "PLAN_LIMIT_EXCEEDED"
-    console.log(e.message);  // "Monthly operation limit reached"
+    console.log(e.status);   // e.g. 403
+    console.log(e.code);     // e.g. "POLICY_DENIED"
+    console.log(e.message);
   }
 }
 ```
 
-All framework integrations (LangChain.js, Vercel AI, OpenAI Agents) are non-blocking by default -- notarization failures are logged, never raised. Your agent keeps running.
+Framework integrations (LangChain.js, Vercel AI, OpenAI Agents) **fail open
+by default** on transient errors (network, 5xx) — a warning is logged and
+the tool still runs. `POLICY_DENIED` and `pending_approval` always
+propagate as thrown errors so disallowed actions are never executed. Pass
+`strict: true` to the integration constructor to fail closed on transient
+errors too.
 
 ---
 

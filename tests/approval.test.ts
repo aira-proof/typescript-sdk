@@ -21,23 +21,21 @@ beforeEach(() => {
   aira = new Aira({ apiKey: "aira_test_xxx" });
 });
 
-// ==================== require_approval ====================
+// ==================== require_approval branch ====================
 
-describe("require_approval", () => {
+describe("authorize() with requireApproval", () => {
   it("sends requireApproval in request body", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
         action_id: "act-1",
         status: "pending_approval",
-        receipt_id: null,
-        payload_hash: null,
-        signature: null,
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
+        warnings: null,
       }),
     );
 
-    await aira.notarize({
+    await aira.authorize({
       actionType: "loan_decision",
       details: "Approve loan for $50k",
       requireApproval: true,
@@ -49,64 +47,57 @@ describe("require_approval", () => {
     expect(body.approvers).toEqual(["manager@example.com"]);
   });
 
+  it("returns pending_approval status", async () => {
+    mockFetch.mockResolvedValue(
+      mockResponse(201, {
+        action_id: "act-pending",
+        status: "pending_approval",
+        created_at: "2026-04-01T00:00:00Z",
+        request_id: "req-1",
+        warnings: null,
+      }),
+    );
+
+    const auth = await aira.authorize({
+      actionType: "test",
+      details: "Needs approval",
+      requireApproval: true,
+    });
+
+    expect(auth.status).toBe("pending_approval");
+    expect(auth.action_id).toBe("act-pending");
+  });
+
   it("omits requireApproval when false/unset", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
         action_id: "act-1",
-        receipt_id: "rct-1",
-        payload_hash: "sha256:abc",
-        signature: "ed25519:xyz",
-        timestamp_token: null,
+        status: "authorized",
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
+        warnings: null,
       }),
     );
 
-    await aira.notarize({ actionType: "test", details: "No approval" });
+    await aira.authorize({ actionType: "test", details: "No approval" });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.require_approval).toBeUndefined();
     expect(body.approvers).toBeUndefined();
   });
 
-  it("omits requireApproval when explicitly false", async () => {
-    mockFetch.mockResolvedValue(
-      mockResponse(201, {
-        action_id: "act-1",
-        receipt_id: "rct-1",
-        payload_hash: "sha256:abc",
-        signature: "ed25519:xyz",
-        timestamp_token: null,
-        created_at: "2026-04-01T00:00:00Z",
-        request_id: "req-1",
-      }),
-    );
-
-    await aira.notarize({
-      actionType: "test",
-      details: "Explicit false",
-      requireApproval: false,
-    });
-
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    // false || undefined → undefined, so it should be filtered out by buildBody
-    expect(body.require_approval).toBeUndefined();
-  });
-
-  it("sends approvers as array of emails", async () => {
+  it("sends multiple approvers", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
         action_id: "act-1",
         status: "pending_approval",
-        receipt_id: null,
-        payload_hash: null,
-        signature: null,
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
+        warnings: null,
       }),
     );
 
-    await aira.notarize({
+    await aira.authorize({
       actionType: "test",
       details: "Multi-approver",
       requireApproval: true,
@@ -117,43 +108,18 @@ describe("require_approval", () => {
     expect(body.approvers).toEqual(["alice@example.com", "bob@example.com"]);
   });
 
-  it("returns pending_approval status in response", async () => {
-    mockFetch.mockResolvedValue(
-      mockResponse(201, {
-        action_id: "act-pending",
-        status: "pending_approval",
-        receipt_id: null,
-        payload_hash: null,
-        signature: null,
-        timestamp_token: null,
-        created_at: "2026-04-01T00:00:00Z",
-        request_id: "req-1",
-      }),
-    );
-
-    const result = await aira.notarize({
-      actionType: "test",
-      details: "Needs approval",
-      requireApproval: true,
-    });
-
-    expect(result.action_id).toBe("act-pending");
-  });
-
-  it("sends requireApproval=true with other params", async () => {
+  it("combines requireApproval with other metadata", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
         action_id: "act-1",
         status: "pending_approval",
-        receipt_id: null,
-        payload_hash: null,
-        signature: null,
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
+        warnings: null,
       }),
     );
 
-    await aira.notarize({
+    await aira.authorize({
       actionType: "email_sent",
       details: "Sent email",
       agentId: "agent-1",

@@ -5,6 +5,7 @@ export { OfflineQueue } from "./offline";
 export type { QueuedRequest } from "./offline";
 export {
   AiraError,
+  type Authorization,
   type ActionReceipt,
   type ActionDetail,
   type AgentDetail,

@@ -3,9 +3,30 @@
  *
  * Requires: @modelcontextprotocol/sdk (peer dependency)
  *
- * Usage:
- *   import { createServer } from "aira-sdk/extras/mcp";
- *   const server = createServer({ apiKey: "aira_live_xxx" });
+ * ---------------------------------------------------------------------------
+ * LIFECYCLE & DESIGN NOTES
+ * ---------------------------------------------------------------------------
+ *
+ * MCP is a bidirectional protocol: the host (an AI agent) connects to this
+ * server and calls the tools explicitly. There is no "wrap" moment — the
+ * agent *chooses* to invoke `authorize_action` before performing the side
+ * effect and `notarize_action` after. There is no hidden hook point.
+ *
+ * That makes this integration AUDIT-ONLY in the sense that we don't own the
+ * execution boundary: we can only do what the caller asks us to do. But the
+ * exposed tools faithfully implement the two-step flow, so an MCP client
+ * that follows the contract gets the full authorization gate.
+ *
+ * Exposed tools:
+ *   - authorize_action   → POST /api/v1/actions
+ *   - notarize_action    → POST /api/v1/actions/{id}/notarize
+ *   - get_action         → GET  /api/v1/actions/{id}
+ *   - verify_action      → GET  /api/v1/verify/action/{id}
+ *   - get_receipt        → GET  /api/v1/receipts/{id}
+ *   - resolve_did        → POST /api/v1/dids/resolve
+ *   - verify_credential  → POST /api/v1/credentials/verify (via agent slug)
+ *   - get_reputation     → GET  /api/v1/agents/{slug}/reputation
+ *   - request_mutual_sign → POST /api/v1/actions/{id}/mutual-sign/request
  */
 
 import type { Aira } from "../client";
@@ -28,17 +49,45 @@ export interface MCPTextContent {
 export function getTools(): MCPTool[] {
   return [
     {
-      name: "notarize_action",
-      description: "Notarize an AI agent action with a cryptographic receipt",
+      name: "authorize_action",
+      description:
+        "Step 1 of the Aira two-step flow. Authorize an action BEFORE it executes. Returns an action_id with status 'authorized' or 'pending_approval'. Throws POLICY_DENIED if a policy blocks the action.",
       inputSchema: {
         type: "object",
         properties: {
-          action_type: { type: "string", description: "e.g. email_sent, loan_approved, claim_processed" },
-          details: { type: "string", description: "What happened" },
+          action_type: { type: "string", description: "e.g. email_sent, loan_approved, wire_transfer" },
+          details: { type: "string", description: "What the agent is about to do" },
           agent_id: { type: "string", description: "Agent slug" },
           model_id: { type: "string", description: "Model used (optional)" },
+          require_approval: { type: "boolean", description: "Force human approval (optional)" },
+          approvers: { type: "array", items: { type: "string" }, description: "Approver emails (optional)" },
         },
         required: ["action_type", "details"],
+      },
+    },
+    {
+      name: "notarize_action",
+      description:
+        "Step 2 of the Aira two-step flow. Notarize the outcome of an already-authorized action. Call this AFTER the action has been executed. Returns a cryptographic receipt when outcome is 'completed'.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action_id: { type: "string", description: "action_id returned from authorize_action" },
+          outcome: { type: "string", enum: ["completed", "failed"], description: "Did the action succeed?" },
+          outcome_details: { type: "string", description: "Optional description of the outcome" },
+        },
+        required: ["action_id"],
+      },
+    },
+    {
+      name: "get_action",
+      description: "Retrieve full details of an action including its receipt and authorizations",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action_id: { type: "string", description: "Action UUID" },
+        },
+        required: ["action_id"],
       },
     },
     {
@@ -118,13 +167,29 @@ export async function handleToolCall(
   args: Record<string, unknown>,
 ): Promise<MCPTextContent[]> {
   try {
-    if (name === "notarize_action") {
-      const result = await client.notarize({
+    if (name === "authorize_action") {
+      const result = await client.authorize({
         actionType: args.action_type as string,
         details: args.details as string,
         agentId: args.agent_id as string | undefined,
         modelId: args.model_id as string | undefined,
+        requireApproval: args.require_approval as boolean | undefined,
+        approvers: args.approvers as string[] | undefined,
       });
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "notarize_action") {
+      const result = await client.notarize({
+        actionId: args.action_id as string,
+        outcome: (args.outcome as "completed" | "failed" | undefined) ?? "completed",
+        outcomeDetails: args.outcome_details as string | undefined,
+      });
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "get_action") {
+      const result = await client.getAction(args.action_id as string);
       return [{ type: "text", text: JSON.stringify(result) }];
     }
 

@@ -1,6 +1,6 @@
 # Aira Offline Mode — Queue & Sync
 
-Demonstrates the SDK's offline mode: queue notarization calls locally without network access, then flush the queue when connectivity is available to get real cryptographic receipts.
+Demonstrates the SDK's offline mode: queue `authorize()` calls locally without network access, then flush the queue with `sync()` and notarize each authorized action to get cryptographic receipts.
 
 ## Use Cases
 
@@ -11,20 +11,21 @@ Demonstrates the SDK's offline mode: queue notarization calls locally without ne
 ## How It Works
 
 1. Create client with `offline: true` — all POST requests are queued in memory
-2. Call `aira.notarize()` as normal — returns instantly with a placeholder
+2. Call `aira.authorize()` — returns instantly with a placeholder `_queue_id`
 3. Check `aira.pendingCount` to see how many actions are queued
-4. Call `aira.sync()` when online — flushes the queue and returns real receipts
+4. Call `aira.sync()` when online — flushes the queue and returns each Authorization result
+5. For each `authorized` result, call `aira.notarize({ actionId, outcome })` to mint a receipt
 
 ```
-notarize() ──> [Queue] ──> [Queue] ──> [Queue]
-                                          │
-                              sync() ─────┘
-                                │
-                          ┌─────┴─────┐
-                          │  API call │  (for each queued item)
-                          └─────┬─────┘
-                                │
-                          Real receipts with Ed25519 signatures
+authorize() ──> [Queue] ──> [Queue] ──> [Queue]
+                                           │
+                               sync() ─────┘
+                                 │
+                         (Authorizations returned)
+                                 │
+                    notarize({ actionId, outcome }) per action
+                                 │
+                     Real receipts with Ed25519 signatures
 ```
 
 ## Setup
