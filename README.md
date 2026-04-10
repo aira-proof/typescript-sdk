@@ -363,15 +363,21 @@ Configure policies at [Settings → Policies](https://app.airaproof.com/dashboar
 
 ## Framework Integrations
 
-Drop Aira into your existing agent framework with one import:
+Drop Aira into your existing agent framework with one import. Every integration is honestly labeled as one of three kinds:
 
-| Framework | Import | Integration |
-|---|---|---|
-| **LangChain.js** | `import { AiraCallbackHandler } from "aira-sdk/extras/langchain"` | Callback handler |
-| **Vercel AI** | `import { AiraVercelMiddleware } from "aira-sdk/extras/vercel-ai"` | Middleware |
-| **OpenAI Agents** | `import { AiraGuardrail } from "aira-sdk/extras/openai-agents"` | Guardrail |
-| **MCP** | `import { createServer } from "aira-sdk/extras/mcp"` | MCP Server |
-| **Webhooks** | `import { verifySignature } from "aira-sdk/extras/webhooks"` | Verification |
+- **gate** — intercepts before execution and can deny. The action is authorized through Aira's policy engine *before* the framework runs the underlying call. Denied actions never run.
+- **audit** — runs after execution because the host framework does not expose a pre-execution hook that can abort. Aira still records a signed receipt; it just cannot prevent the action.
+- **adapter** — exposes Aira's own API as a tool the host framework can call. Neither a gate nor an audit hook over other tools.
+
+We ship fewer integrations than some competitors and label every one of them honestly. The integration matrix is generated from `INTEGRATIONS` in `aira-sdk/extras` — the docs cannot drift from the code.
+
+| Integration | Import | Type | Pre-execution gate? | Surface | Notes |
+|---|---|---|---|---|---|
+| **LangChain.js** | `aira-sdk/extras/langchain` | gate | Yes (tools); No (chains/LLMs) | `AiraCallbackHandler` | `handleToolStart` calls `authorize()` and throws on `POLICY_DENIED` so the tool never runs. Chain/LLM hooks are post-hoc because LangChain has no pre-execution chain hook that can abort. |
+| **Vercel AI SDK** | `aira-sdk/extras/vercel-ai` | gate | Yes (`wrapTool`); No (`onFinish`) | `AiraVercelMiddleware` | `wrapTool()` wraps the tool's `execute` so `authorize()` runs before the tool body. `onStepFinish` / `onFinish` callbacks are explicitly labeled audit-only. |
+| **OpenAI Agents** | `aira-sdk/extras/openai-agents` | gate | Yes | `AiraGuardrail.wrapTool()` | Wraps each tool function: `authorize()` runs before the tool body. Denied calls throw; failed calls notarize with `outcome="failed"`. |
+| **MCP** | `aira-sdk/extras/mcp` | adapter | N/A | `createServer()` | MCP is bidirectional: the agent CHOOSES to call `authorize_action` / `notarize_action`. Not a wrapper over other MCP tools — it's a protocol adapter. |
+| **Webhooks** | `aira-sdk/extras/webhooks` | adapter | N/A | `verifySignature()` | Standalone HMAC-SHA256 webhook signature verifier. Not an agent integration. |
 
 ### LangChain.js
 
