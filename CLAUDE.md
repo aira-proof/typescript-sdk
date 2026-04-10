@@ -46,7 +46,7 @@ npx tsc --noEmit
 
 ### Client Methods
 - All methods async, return `Promise<T>`
-- Single params object (not spread args): `notarize({ actionType, details, ... })`
+- Single params object (not spread args): `authorize({ actionType, details, ... })` and `notarize({ actionId, outcome, ... })`
 - camelCase in SDK, snake_case in API bodies — `buildBody()` handles conversion
 - Use `buildBody()` to filter undefined/null values
 - Mirror Python SDK method names (camelCase equivalent)

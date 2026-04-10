@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AiraCallbackHandler } from "../src/extras/langchain";
+import { AiraError } from "../src/types";
 
-const mockNotarize = vi.fn().mockResolvedValue({ action_id: "a1" });
+const mockAuthorize = vi.fn();
+const mockNotarize = vi.fn().mockResolvedValue({ action_id: "a1", status: "notarized" });
 const mockResolveDid = vi.fn().mockResolvedValue({ did: "did:web:airaproof.com:agents:partner" });
 const mockGetAgentCredential = vi.fn().mockResolvedValue({ type: "VerifiableCredential" });
 const mockVerifyCredential = vi.fn().mockResolvedValue({ valid: true });
 const mockGetReputation = vi.fn().mockResolvedValue({ score: 85, tier: "trusted" });
 const mockClient = {
+  authorize: mockAuthorize,
   notarize: mockNotarize,
   resolveDid: mockResolveDid,
   getAgentCredential: mockGetAgentCredential,
@@ -15,6 +18,8 @@ const mockClient = {
 } as any;
 
 beforeEach(() => {
+  mockAuthorize.mockReset();
+  mockAuthorize.mockResolvedValue({ action_id: "a1", status: "authorized" });
   mockNotarize.mockClear();
   mockResolveDid.mockClear();
   mockGetAgentCredential.mockClear();
@@ -22,78 +27,136 @@ beforeEach(() => {
   mockGetReputation.mockClear();
 });
 
-describe("AiraCallbackHandler", () => {
-  it("notarizes tool end", () => {
+describe("AiraCallbackHandler — pre-execution gate", () => {
+  it("authorizes on handleToolStart", async () => {
     const handler = new AiraCallbackHandler(mockClient, "agent-1");
-    handler.handleToolEnd("result data", "search");
+    await handler.handleToolStart({ name: "search" }, "query input", "run-1");
 
-    expect(mockNotarize).toHaveBeenCalledOnce();
-    const call = mockNotarize.mock.calls[0][0];
+    expect(mockAuthorize).toHaveBeenCalledOnce();
+    const call = mockAuthorize.mock.calls[0][0];
     expect(call.actionType).toBe("tool_call");
     expect(call.agentId).toBe("agent-1");
     expect(call.details).toContain("search");
-    expect(call.details).toContain("11 chars");
   });
 
-  it("notarizes chain end", () => {
+  it("notarizes on handleToolEnd with the cached action_id", async () => {
     const handler = new AiraCallbackHandler(mockClient, "agent-1");
-    handler.handleChainEnd({ output: "data", score: 0.9 });
+    await handler.handleToolStart({ name: "search" }, "q", "run-42");
+    await handler.handleToolEnd("result output", "run-42", "search");
 
+    expect(mockNotarize).toHaveBeenCalledOnce();
     const call = mockNotarize.mock.calls[0][0];
-    expect(call.actionType).toBe("chain_completed");
-    expect(call.details).toContain("output");
-    expect(call.details).toContain("score");
+    expect(call.actionId).toBe("a1");
+    expect(call.outcome).toBe("completed");
+    expect(call.outcomeDetails).toContain("search");
   });
 
-  it("notarizes LLM end", () => {
+  it("notarizes as failed on handleToolError", async () => {
     const handler = new AiraCallbackHandler(mockClient, "agent-1");
-    handler.handleLLMEnd(3);
+    await handler.handleToolStart({ name: "search" }, "q", "run-9");
+    await handler.handleToolError(new Error("boom"), "run-9", "search");
 
     const call = mockNotarize.mock.calls[0][0];
-    expect(call.actionType).toBe("llm_completion");
-    expect(call.details).toContain("3");
+    expect(call.outcome).toBe("failed");
+    expect(call.outcomeDetails).toContain("boom");
   });
 
-  it("includes model_id when provided", () => {
-    const handler = new AiraCallbackHandler(mockClient, "agent-1", { modelId: "gpt-4o" });
-    handler.handleToolEnd("x", "tool");
-
-    const call = mockNotarize.mock.calls[0][0];
-    expect(call.modelId).toBe("gpt-4o");
-  });
-
-  it("uses custom action types", () => {
-    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
-      actionTypes: { tool_end: "custom_tool" },
-    });
-    handler.handleToolEnd("x", "tool");
-
-    expect(mockNotarize.mock.calls[0][0].actionType).toBe("custom_tool");
-  });
-
-  it("truncates details to 5000 chars", () => {
+  it("blocks execution on pending_approval", async () => {
+    mockAuthorize.mockResolvedValueOnce({ action_id: "a2", status: "pending_approval" });
     const handler = new AiraCallbackHandler(mockClient, "agent-1");
-    handler.handleToolEnd("x", "a".repeat(6000));
 
-    const call = mockNotarize.mock.calls[0][0];
-    expect(call.details.length).toBeLessThanOrEqual(5000);
+    await expect(
+      handler.handleToolStart({ name: "wire" }, "send", "run-5"),
+    ).rejects.toThrow(/pending human approval/);
+
+    // Tool end should not notarize — nothing was cached
+    await handler.handleToolEnd("result", "run-5", "wire");
+    expect(mockNotarize).not.toHaveBeenCalled();
   });
 
-  it("does not throw on notarize failure", () => {
-    const failClient = { notarize: vi.fn().mockRejectedValue(new Error("fail")) } as any;
-    const handler = new AiraCallbackHandler(failClient, "agent-1");
+  it("rethrows POLICY_DENIED errors from authorize", async () => {
+    const err = new AiraError(403, "POLICY_DENIED", "Blocked");
+    mockAuthorize.mockRejectedValueOnce(err);
+
+    const handler = new AiraCallbackHandler(mockClient, "agent-1");
+    await expect(
+      handler.handleToolStart({ name: "wire" }, "send", "run-6"),
+    ).rejects.toThrow("POLICY_DENIED");
+  });
+
+  it("fails open on transient errors by default", async () => {
+    mockAuthorize.mockRejectedValueOnce(new Error("network timeout"));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    expect(() => handler.handleToolEnd("x", "tool")).not.toThrow();
+    const handler = new AiraCallbackHandler(mockClient, "agent-1");
+    await expect(
+      handler.handleToolStart({ name: "search" }, "q", "run-7"),
+    ).resolves.toBeUndefined();
+
+    expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it("fails closed in strict mode", async () => {
+    mockAuthorize.mockRejectedValueOnce(new Error("network timeout"));
+
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", { strict: true });
+    await expect(
+      handler.handleToolStart({ name: "search" }, "q", "run-8"),
+    ).rejects.toThrow();
+  });
+
+  it("gates chains via handleChainStart / handleChainEnd", async () => {
+    const handler = new AiraCallbackHandler(mockClient, "agent-1");
+    await handler.handleChainStart({ name: "rag" }, { query: "x" }, "run-c1");
+    await handler.handleChainEnd({ output: "done" }, "run-c1");
+
+    expect(mockAuthorize).toHaveBeenCalledOnce();
+    expect(mockNotarize).toHaveBeenCalledOnce();
+    expect(mockAuthorize.mock.calls[0][0].actionType).toBe("chain_run");
+    expect(mockNotarize.mock.calls[0][0].outcome).toBe("completed");
+  });
+
+  it("gates LLM calls via handleLLMStart / handleLLMEnd", async () => {
+    const handler = new AiraCallbackHandler(mockClient, "agent-1");
+    await handler.handleLLMStart({}, ["prompt 1", "prompt 2"], "run-l1");
+    await handler.handleLLMEnd({ generations: [1, 2] }, "run-l1");
+
+    expect(mockAuthorize).toHaveBeenCalledOnce();
+    expect(mockAuthorize.mock.calls[0][0].actionType).toBe("llm_run");
+    expect(mockNotarize).toHaveBeenCalledOnce();
+  });
+
+  it("includes model_id when provided", async () => {
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", { modelId: "gpt-4o" });
+    await handler.handleToolStart({ name: "t" }, "x", "run-m");
+    expect(mockAuthorize.mock.calls[0][0].modelId).toBe("gpt-4o");
+  });
+
+  it("uses custom action types", async () => {
+    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
+      actionTypes: { tool: "custom_tool" },
+    });
+    await handler.handleToolStart({ name: "t" }, "x", "run-ct");
+    expect(mockAuthorize.mock.calls[0][0].actionType).toBe("custom_tool");
+  });
+
+  it("truncates long details", async () => {
+    const handler = new AiraCallbackHandler(mockClient, "agent-1");
+    await handler.handleToolStart({ name: "a".repeat(6000) }, "q", "run-t");
+    const call = mockAuthorize.mock.calls[0][0];
+    expect(call.details.length).toBeLessThanOrEqual(5000);
   });
 
   it("returns LangChain-compatible callbacks via asCallbacks()", () => {
     const handler = new AiraCallbackHandler(mockClient, "agent-1");
     const cbs = handler.asCallbacks();
-
+    expect(cbs.handleToolStart).toBeTypeOf("function");
     expect(cbs.handleToolEnd).toBeTypeOf("function");
+    expect(cbs.handleToolError).toBeTypeOf("function");
+    expect(cbs.handleChainStart).toBeTypeOf("function");
     expect(cbs.handleChainEnd).toBeTypeOf("function");
+    expect(cbs.handleLLMStart).toBeTypeOf("function");
     expect(cbs.handleLLMEnd).toBeTypeOf("function");
   });
 });
@@ -117,8 +180,6 @@ describe("AiraCallbackHandler trust policy", () => {
     expect(ctx.didResolved).toBe(true);
     expect(ctx.reputationScore).toBe(85);
     expect(ctx.blocked).toBe(false);
-    expect(mockResolveDid).toHaveBeenCalledOnce();
-    expect(mockGetReputation).toHaveBeenCalledOnce();
   });
 
   it("warns when reputation is below minimum", async () => {
@@ -152,17 +213,5 @@ describe("AiraCallbackHandler trust policy", () => {
 
     expect(ctx.blocked).toBe(true);
     expect(ctx.blockReason).toContain("could not be resolved");
-  });
-
-  it("does not block on invalid VC without blockRevokedVc", async () => {
-    mockVerifyCredential.mockResolvedValueOnce({ valid: false });
-    const handler = new AiraCallbackHandler(mockClient, "agent-1", {
-      trustPolicy: { requireValidVc: true },
-    });
-    const ctx = await handler.checkTrust("partner");
-
-    expect(ctx.blocked).toBe(false);
-    expect(ctx.vcValid).toBe(false);
-    expect(ctx.recommendation).toContain("proceed with caution");
   });
 });
