@@ -1,11 +1,9 @@
-# Aira TypeScript SDK
-
-**AI governance infrastructure.**
+# Aira TypeScript SDK — The authorization and audit layer for AI agents.
 
 [![npm version](https://img.shields.io/npm/v/aira-sdk.svg)](https://www.npmjs.com/package/aira-sdk)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-Policies evaluate every agent action. Humans approve high-stakes decisions. Cryptographic receipts prove it all. Rules, AI, and multi-model consensus govern what your agents can do — with Ed25519 signatures, RFC 3161 timestamps, and W3C DID identity. Built for EU AI Act, SR 11-7, and GDPR compliance.
+Drop Aira into your agent stack in one line. Define policies without changing code. Get cryptographic proof of every decision — for your auditors, your board, or a court. Not because regulation requires it. Because your agents are acting in production right now.
 
 ```bash
 npm install aira-sdk
