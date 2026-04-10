@@ -142,7 +142,18 @@ export interface EscrowTransaction {
   reference_action_id?: string | null;
 }
 
-/** Public verification result. */
+/**
+ * Result of a public action receipt verification.
+ *
+ * The endpoint actually recomputes the SHA-256 hash and verifies the
+ * Ed25519 signature against the published public key — `valid` is the
+ * result of that real cryptographic check, not just an existence check.
+ *
+ * On a successful (or tamper-detected) verification the result includes
+ * the full evidence — `signature`, `public_key`, `signed_payload`,
+ * `timestamp_token` — so an external auditor can re-run the same check
+ * with OpenSSL or any Ed25519 library without trusting Aira's verdict.
+ */
 export interface VerifyResult {
   valid: boolean;
   public_key_id: string;
@@ -151,6 +162,12 @@ export interface VerifyResult {
   request_id: string;
   receipt_id?: string | null;
   action_id?: string | null;
+  payload_hash?: string | null;
+  signature?: string | null;
+  public_key?: string | null;
+  algorithm?: string | null;
+  timestamp_token?: string | null;
+  signed_payload?: Record<string, unknown> | null;
 }
 
 /** Paginated list response. */
