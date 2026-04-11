@@ -46,9 +46,9 @@ describe("INTEGRATIONS registry", () => {
   });
 
   it("at least three real gates", () => {
-    // SidClaw counts integrations; we win on quality. The TS SDK has fewer
-    // total framework integrations than the Python SDK but every framework
-    // it claims to gate must really gate.
+    // Quality over count. The TS SDK has fewer total framework integrations
+    // than the Python SDK but every framework it claims to gate must really
+    // gate (pre-execution authorize), not just audit after the fact.
     const gates = INTEGRATIONS.filter((s) => s.kind === "gate");
     expect(
       gates.length,
