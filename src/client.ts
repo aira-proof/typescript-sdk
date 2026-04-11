@@ -145,6 +145,13 @@ export class Aira {
     idempotencyKey?: string;
     requireApproval?: boolean;
     approvers?: string[];
+    // F10: replay context — optional reproducibility metadata.
+    // Persisted on the action row, committed in the v1.3 receipt
+    // payload, and surfaced via getReplayContext().
+    systemPromptHash?: string;
+    toolInputsHash?: string;
+    modelParams?: Record<string, unknown>;
+    executionEnv?: Record<string, unknown>;
   }): Promise<Authorization> {
     const body = buildBody({
       action_type: params.actionType,
@@ -160,6 +167,10 @@ export class Aira {
       idempotency_key: params.idempotencyKey,
       require_approval: params.requireApproval || undefined,
       approvers: params.approvers,
+      system_prompt_hash: params.systemPromptHash,
+      tool_inputs_hash: params.toolInputsHash,
+      model_params: params.modelParams,
+      execution_env: params.executionEnv,
     });
     return this.post<Authorization>("/actions", body);
   }
@@ -507,6 +518,166 @@ export class Aira {
   /** Verify a reputation score by returning inputs and score_hash. */
   async verifyReputation(slug: string): Promise<Record<string, unknown>> {
     return this.get(`/agents/${slug}/reputation/verify`);
+  }
+
+  // ==================== Replay context (F10) ====================
+
+  /**
+   * Get all reproducibility metadata stored for an action.
+   *
+   * Returns the system_prompt_hash, tool_inputs_hash, model_params,
+   * execution_env, and other knobs that an external replay tool
+   * needs to confirm it has the same inputs as the original run.
+   */
+  async getReplayContext(actionId: string): Promise<Record<string, unknown>> {
+    return this.get(`/actions/${actionId}/replay-context`);
+  }
+
+  // ==================== Compliance bundles ====================
+
+  /**
+   * Seal a regulator-ready evidence bundle for a date range.
+   *
+   * `framework` must be one of: `eu_ai_act_art12`, `iso_42001`,
+   * `aiuc_1`, `soc_2_cc7`, `raw`.
+   */
+  async createComplianceBundle(params: {
+    framework: "eu_ai_act_art12" | "iso_42001" | "aiuc_1" | "soc_2_cc7" | "raw";
+    periodStart: string;
+    periodEnd: string;
+    title?: string;
+    agentFilter?: string[];
+  }): Promise<Record<string, unknown>> {
+    const body = buildBody({
+      framework: params.framework,
+      period_start: params.periodStart,
+      period_end: params.periodEnd,
+      title: params.title,
+      agent_filter: params.agentFilter,
+    });
+    return this.post("/compliance/bundles", body);
+  }
+
+  async listComplianceBundles(page = 1, perPage = 20): Promise<PaginatedList<Record<string, unknown>>> {
+    const data = await this.get<Record<string, unknown>>(
+      `/compliance/bundles?page=${page}&per_page=${perPage}`,
+    );
+    return this.paginated<Record<string, unknown>>(data);
+  }
+
+  async getComplianceBundle(bundleId: string): Promise<Record<string, unknown>> {
+    return this.get(`/compliance/bundles/${bundleId}`);
+  }
+
+  /**
+   * Download the self-contained JSON document for the bundle. The
+   * exported document inlines every receipt's signed payload + signature
+   * and the JWKS URL so an auditor can re-verify offline.
+   */
+  async exportComplianceBundle(bundleId: string): Promise<Record<string, unknown>> {
+    return this.get(`/compliance/bundles/${bundleId}/export`);
+  }
+
+  async getBundleInclusionProof(bundleId: string, receiptId: string): Promise<Record<string, unknown>> {
+    return this.get(`/compliance/bundles/${bundleId}/inclusion-proof/${receiptId}`);
+  }
+
+  // ==================== Drift detection ====================
+
+  /**
+   * Score the agent's recent behavior against its active baseline.
+   * Read-only — does NOT persist an alert. Use this for dashboards.
+   */
+  async getDriftStatus(agentId: string, lookbackHours = 24): Promise<Record<string, unknown>> {
+    return this.get(`/agents/${agentId}/drift?lookback_hours=${lookbackHours}`);
+  }
+
+  /** Compute a behavioral baseline from production action history. */
+  async computeDriftBaseline(params: {
+    agentId: string;
+    windowStart: string;
+    windowEnd: string;
+    activate?: boolean;
+  }): Promise<Record<string, unknown>> {
+    return this.post(
+      `/agents/${params.agentId}/drift/baseline`,
+      buildBody({
+        window_start: params.windowStart,
+        window_end: params.windowEnd,
+        activate: params.activate ?? true,
+      }),
+    );
+  }
+
+  /** Seed a baseline from a config dict (for cold-start agents). */
+  async seedSyntheticBaseline(params: {
+    agentId: string;
+    expectedDistribution: Record<string, number>;
+    expectedActionsPerDay: number;
+    activate?: boolean;
+  }): Promise<Record<string, unknown>> {
+    return this.post(
+      `/agents/${params.agentId}/drift/baseline/synthetic`,
+      buildBody({
+        expected_distribution: params.expectedDistribution,
+        expected_actions_per_day: params.expectedActionsPerDay,
+        activate: params.activate ?? true,
+      }),
+    );
+  }
+
+  /** Score the current window and persist an alert if it exceeds the threshold. */
+  async runDriftCheck(agentId: string, lookbackHours = 24): Promise<Record<string, unknown> | null> {
+    return this.post(
+      `/agents/${agentId}/drift/check?lookback_hours=${lookbackHours}`,
+      {},
+    );
+  }
+
+  async listDriftAlerts(
+    agentId: string,
+    page = 1,
+    acknowledged?: boolean,
+  ): Promise<PaginatedList<Record<string, unknown>>> {
+    let params = `page=${page}&per_page=50`;
+    if (acknowledged !== undefined) {
+      params += `&acknowledged=${acknowledged}`;
+    }
+    const data = await this.get<Record<string, unknown>>(
+      `/agents/${agentId}/drift/alerts?${params}`,
+    );
+    return this.paginated<Record<string, unknown>>(data);
+  }
+
+  async acknowledgeDriftAlert(agentId: string, alertId: string): Promise<Record<string, unknown>> {
+    return this.post(`/agents/${agentId}/drift/alerts/${alertId}/acknowledge`, {});
+  }
+
+  // ==================== Merkle settlement (F8) ====================
+
+  /**
+   * Seal every unsettled receipt for the org into a new settlement.
+   * Admin-only. Returns the new settlement, or null if there were no
+   * unsettled receipts (no-op).
+   */
+  async createSettlement(): Promise<Record<string, unknown> | null> {
+    return this.post("/settlements", {});
+  }
+
+  async listSettlements(page = 1, perPage = 20): Promise<PaginatedList<Record<string, unknown>>> {
+    const data = await this.get<Record<string, unknown>>(
+      `/settlements?page=${page}&per_page=${perPage}`,
+    );
+    return this.paginated<Record<string, unknown>>(data);
+  }
+
+  async getSettlement(settlementId: string): Promise<Record<string, unknown>> {
+    return this.get(`/settlements/${settlementId}`);
+  }
+
+  /** Get the Merkle inclusion proof for one receipt in its settlement. */
+  async getSettlementInclusionProof(receiptId: string): Promise<Record<string, unknown>> {
+    return this.get(`/settlements/inclusion-proof/${receiptId}`);
   }
 
   // ==================== Session ====================
