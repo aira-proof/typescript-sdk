@@ -66,15 +66,107 @@ The returned `ActionReceipt` carries the Ed25519 signature and RFC 3161
 timestamp token. If you pass `outcome: "failed"`, the backend still writes
 an audit entry but leaves `signature` / `receipt_id` null.
 
+### Reproducibility metadata (replay context)
+
+Pass any of the following optional fields to `authorize()` and they're committed in the signed receipt payload (v1.3) and surfaced via `getReplayContext()` so an external replay tool can confirm it has the same inputs as the original run:
+
+```typescript
+const auth = await aira.authorize({
+  actionType: "tool_call",
+  details: "Calling search() with structured input",
+  agentId: "research-agent",
+  modelId: "claude-sonnet-4-6",
+  // Optional reproducibility metadata
+  systemPromptHash: "sha256:a1b2c3...",
+  toolInputsHash: "sha256:d4e5f6...",
+  modelParams: { temperature: 0.0, top_p: 1.0, seed: 42 },
+  executionEnv: {
+    sdk_version: "2.0.1",
+    framework: "langchain",
+    framework_version: "0.3.0",
+  },
+});
+```
+
+---
+
+## Compliance bundles
+
+Seal a regulator-ready evidence bundle for a date range. Every receipt in the period is Merkle-rooted, signed, and the export is JWKS-verifiable offline.
+
+```typescript
+// Build a Q1 2026 EU AI Act Article 12 evidence packet
+const bundle = await aira.createComplianceBundle({
+  framework: "eu_ai_act_art12", // or iso_42001, aiuc_1, soc_2_cc7, raw
+  periodStart: "2026-01-01T00:00:00Z",
+  periodEnd: "2026-04-01T00:00:00Z",
+  title: "Q1 2026 evidence packet",
+  agentFilter: ["payments-agent", "support-agent"],
+});
+console.log(bundle.merkle_root, bundle.receipt_count);
+
+// Download the self-contained JSON for an auditor
+const exported = await aira.exportComplianceBundle(bundle.id as string);
+// `exported` includes every receipt, the JWKS URL, and a verification recipe.
+```
+
+## Drift detection
+
+Per-agent behavioral baselines + KL divergence scoring + alerts when an agent's behavior shifts away from its expected pattern.
+
+```typescript
+// Compute a baseline from the last 7 days of action history
+const end = new Date();
+const start = new Date(end.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+await aira.computeDriftBaseline({
+  agentId: "payments-agent",
+  windowStart: start.toISOString(),
+  windowEnd: end.toISOString(),
+});
+
+// Or seed a baseline from a config dict (cold start)
+await aira.seedSyntheticBaseline({
+  agentId: "payments-agent",
+  expectedDistribution: { wire_transfer: 0.05, email_sent: 0.40, api_call: 0.55 },
+  expectedActionsPerDay: 200,
+});
+
+// Read-only status check for dashboards
+const status = await aira.getDriftStatus("payments-agent", 24);
+console.log(status.kl_divergence, status.severity);
+
+// Run a check that records an alert if the threshold is exceeded
+const alert = await aira.runDriftCheck("payments-agent");
+if (alert) console.log(`Drift detected: ${alert.severity}`);
+```
+
+## Merkle settlement
+
+Periodic Merkle anchoring of action receipts. Every receipt eventually gets sealed into exactly one settlement; the settlement's Merkle root is the cryptographic commitment that the batch existed at a specific moment in time.
+
+```typescript
+// Admin: seal all unsettled receipts
+const settlement = await aira.createSettlement();
+if (settlement) {
+  console.log(settlement.merkle_root, settlement.receipt_count);
+}
+
+// An auditor wants to prove a single receipt was in a settlement
+const proof = await aira.getSettlementInclusionProof("rct-abc-123");
+// proof has { merkle_root, leaf_hash, index, leaf_count, siblings }
+// A regulator can verify it offline with a 10-line pure-function walker.
+```
+
 ---
 
 ## Core SDK Methods
 
-All 52 methods on `Aira`. Every write operation produces a cryptographic receipt.
+Every write operation produces a cryptographic receipt.
 
 | Category | Method | Description |
 |---|---|---|
-| **Actions** | `authorize()` | Step 1 — authorize an action BEFORE it runs (throws POLICY_DENIED) |
+| **Actions** | `authorize()` | Step 1 — authorize an action BEFORE it runs (throws POLICY_DENIED). Accepts optional replay context fields (`systemPromptHash`, `toolInputsHash`, `modelParams`, `executionEnv`). |
 | | `notarize()` | Step 2 — notarize the outcome, returns Ed25519-signed receipt |
 | | `getAction()` | Retrieve action details + receipt |
 | | `listActions()` | List actions with filters (type, agent, status) |
@@ -82,7 +174,23 @@ All 52 methods on `Aira`. Every write operation produces a cryptographic receipt
 | | `setLegalHold()` | Prevent deletion -- litigation hold |
 | | `releaseLegalHold()` | Release litigation hold |
 | | `getActionChain()` | Chain of custody for an action |
-| | `verifyAction()` | Public verification -- no auth required |
+| | `getReplayContext()` | All reproducibility metadata for an action (system prompt hash, tool inputs hash, model params, execution env) |
+| | `verifyAction()` | Public verification -- no auth required. Returns full evidence (signature, public key, signed payload, RFC 3161 token) plus the second-party `policy_evaluator_attestation` for multi-party signing. |
+| **Compliance** | `createComplianceBundle()` | Seal a regulator-ready evidence bundle for a date range. Frameworks: `eu_ai_act_art12`, `iso_42001`, `aiuc_1`, `soc_2_cc7`, `raw`. Merkle-rooted, signed, JWKS-verifiable offline. |
+| | `listComplianceBundles()` | List bundles for the org |
+| | `getComplianceBundle()` | Get bundle metadata |
+| | `exportComplianceBundle()` | Download the self-contained JSON for offline verification |
+| | `getBundleInclusionProof()` | Merkle inclusion proof for one receipt within a bundle |
+| **Drift** | `getDriftStatus()` | Read-only KL divergence + volume ratio against the active baseline |
+| | `computeDriftBaseline()` | Build a baseline from a window of production action history |
+| | `seedSyntheticBaseline()` | Seed a baseline from a config dict (cold start) |
+| | `runDriftCheck()` | Score the current window and persist a `DriftAlert` if it exceeds the threshold |
+| | `listDriftAlerts()` | List drift alerts for an agent |
+| | `acknowledgeDriftAlert()` | Acknowledge an alert |
+| **Settlement** | `createSettlement()` | Seal every unsettled receipt into a Merkle-rooted, signed batch (admin-only) |
+| | `listSettlements()` | List settlements |
+| | `getSettlement()` | Get settlement metadata |
+| | `getSettlementInclusionProof()` | Get a receipt's Merkle inclusion proof from its settlement |
 | **Agents** | `registerAgent()` | Register verifiable agent identity |
 | | `getAgent()` | Retrieve agent profile |
 | | `listAgents()` | List registered agents |
