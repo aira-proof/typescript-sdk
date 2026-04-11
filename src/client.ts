@@ -547,6 +547,12 @@ export class Aira {
     periodEnd: string;
     title?: string;
     agentFilter?: string[];
+    /**
+     * Client-supplied key (unique per org) — retrying with the same key
+     * returns the original bundle and does NOT charge a second operation.
+     * Use this if your job runner may replay the call on network flakes.
+     */
+    idempotencyKey?: string;
   }): Promise<Record<string, unknown>> {
     const body = buildBody({
       framework: params.framework,
@@ -554,6 +560,7 @@ export class Aira {
       period_end: params.periodEnd,
       title: params.title,
       agent_filter: params.agentFilter,
+      idempotency_key: params.idempotencyKey,
     });
     return this.post("/compliance/bundles", body);
   }
