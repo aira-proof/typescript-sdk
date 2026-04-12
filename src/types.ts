@@ -53,6 +53,7 @@ export interface ActionDetail {
     timestamp_token: string | null;
     receipt_version: string;
     verify_url: string;
+    created_at: string | null;
   } | null;
   authorizations: { id: string; authorizer_email: string; authorized_at: string | null }[];
   request_id: string;
