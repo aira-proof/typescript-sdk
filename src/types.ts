@@ -36,6 +36,7 @@ export interface ActionReceipt {
 /** Full action details including receipt and authorizations. */
 export interface ActionDetail {
   action_id: string;
+  org_id: string;
   action_type: string;
   action_details_hash: string;
   agent_id: string | null;
@@ -57,6 +58,10 @@ export interface ActionDetail {
   } | null;
   authorizations: { id: string; authorizer_email: string; authorized_at: string | null }[];
   request_id: string;
+  system_prompt_hash?: string | null;
+  tool_inputs_hash?: string | null;
+  model_params?: Record<string, unknown> | null;
+  execution_env?: Record<string, unknown> | null;
 }
 
 /** Registered agent identity. */
@@ -169,6 +174,7 @@ export interface VerifyResult {
   algorithm?: string | null;
   timestamp_token?: string | null;
   signed_payload?: Record<string, unknown> | null;
+  policy_evaluator_attestation?: { evaluator_key_id: string; signature: string; payload_hash: string } | null;
 }
 
 /** Paginated list response. */
