@@ -229,3 +229,54 @@ export class AiraError extends Error {
     this.details = details;
   }
 }
+
+
+// ─── Compliance reports (Phase 1) ──────────────────────────────────
+
+export interface ComplianceReport {
+  id: string;
+  framework: string;
+  status: "pending" | "generating" | "ready" | "failed";
+  created_at: string;
+  request_id?: string;
+  org_id?: string;
+  period_start?: string | null;
+  period_end?: string | null;
+  action_id?: string | null;
+  agent_filter?: string[] | null;
+  receipt_count?: number | null;
+  pdf_size_bytes?: number | null;
+  content_hash?: string | null;
+  signature?: string | null;
+  signing_key_id?: string | null;
+  timestamp_token?: string | null;
+  timestamp_token_present?: boolean;
+  report_metadata?: Record<string, unknown> | null;
+  error_message?: string | null;
+  generated_at?: string | null;
+}
+
+export interface ComplianceReportListResponse {
+  items: ComplianceReport[];
+  total: number;
+  limit: number;
+  offset: number;
+  request_id: string;
+}
+
+export interface ComplianceReportVerification {
+  report_id: string;
+  valid: boolean;
+  checks: Record<string, unknown>;
+  descriptor?: Record<string, unknown> | null;
+  request_id: string;
+}
+
+export interface ActionExplanation {
+  action: Record<string, unknown>;
+  policy_chain: Array<Record<string, unknown>>;
+  approval_chain: Array<Record<string, unknown>>;
+  receipt?: Record<string, unknown> | null;
+  regulation: Record<string, unknown>;
+  request_id: string;
+}

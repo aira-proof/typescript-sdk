@@ -2,6 +2,8 @@ import {
   Authorization, ActionReceipt, ActionDetail, AgentDetail, AgentVersion,
   CosignResult, EvidencePackage, ComplianceSnapshot, EscrowAccount, EscrowTransaction,
   VerifyResult, PaginatedList, AiraError,
+  ComplianceReport, ComplianceReportListResponse, ComplianceReportVerification,
+  ActionExplanation,
 } from "./types";
 import { OfflineQueue, type QueuedRequest } from "./offline";
 import { AiraSession } from "./session";
@@ -685,6 +687,126 @@ export class Aira {
   /** Get the Merkle inclusion proof for one receipt in its settlement. */
   async getSettlementInclusionProof(receiptId: string): Promise<Record<string, unknown>> {
     return this.get(`/settlements/inclusion-proof/${receiptId}`);
+  }
+
+  // ==================== Compliance reports (Phase 1) ====================
+
+  /**
+   * Generate a regulatory PDF report (Article 12 / 9 / 6).
+   *
+   * Frameworks:
+   * - `eu_ai_act_art12` — Annex VII technical file. Requires period.
+   * - `eu_ai_act_art9` — risk management register. Requires period.
+   * - `eu_ai_act_art6` — single-action explanation. Requires actionId.
+   */
+  async createComplianceReport(params: {
+    framework: string;
+    periodStart?: string;
+    periodEnd?: string;
+    actionId?: string;
+    agentFilter?: string[];
+  }): Promise<ComplianceReport> {
+    const body = buildBody({
+      framework: params.framework,
+      period_start: params.periodStart,
+      period_end: params.periodEnd,
+      action_id: params.actionId,
+      agent_filter: params.agentFilter,
+    });
+    return this.post<ComplianceReport>("/compliance/reports", body);
+  }
+
+  /** Get the metadata for a compliance report (no PDF bytes). */
+  async getComplianceReport(reportId: string): Promise<ComplianceReport> {
+    return this.get<ComplianceReport>(`/compliance/reports/${reportId}`);
+  }
+
+  /** List compliance reports with optional filters. */
+  async listComplianceReports(params?: {
+    framework?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ComplianceReportListResponse> {
+    return this.get<ComplianceReportListResponse>(
+      "/compliance/reports",
+      buildBody({ ...params }),
+    );
+  }
+
+  /** Download the generated PDF as raw bytes (Uint8Array). */
+  async downloadComplianceReport(reportId: string): Promise<Uint8Array> {
+    if (this.queue) {
+      throw new AiraError(
+        0,
+        "OFFLINE",
+        "Downloads are not available in offline mode",
+      );
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const res = await fetch(
+        `${this.baseUrl}/compliance/reports/${reportId}/download`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          signal: controller.signal,
+        },
+      );
+      if (!res.ok) {
+        throw new AiraError(res.status, "DOWNLOAD_FAILED", res.statusText);
+      }
+      const buf = await res.arrayBuffer();
+      return new Uint8Array(buf);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Verify a compliance report's signature and content hash. */
+  async verifyComplianceReport(
+    reportId: string,
+  ): Promise<ComplianceReportVerification> {
+    return this.get<ComplianceReportVerification>(
+      `/compliance/reports/${reportId}/verify`,
+    );
+  }
+
+  /** Article 6 right-to-explanation for a single action. */
+  async getActionExplanation(actionId: string): Promise<ActionExplanation> {
+    return this.get<ActionExplanation>(
+      `/actions/${actionId}/explanation`,
+    );
+  }
+
+  /** Download the Article 6 explanation as a PDF. */
+  async downloadActionExplanationPdf(actionId: string): Promise<Uint8Array> {
+    if (this.queue) {
+      throw new AiraError(
+        0,
+        "OFFLINE",
+        "Downloads are not available in offline mode",
+      );
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const res = await fetch(
+        `${this.baseUrl}/actions/${actionId}/explanation/pdf`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          signal: controller.signal,
+        },
+      );
+      if (!res.ok) {
+        throw new AiraError(res.status, "DOWNLOAD_FAILED", res.statusText);
+      }
+      return new Uint8Array(await res.arrayBuffer());
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   // ==================== Session ====================
