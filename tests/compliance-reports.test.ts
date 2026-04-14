@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Aira, AiraError } from "../src";
+import {
+  Aira,
+  AiraError,
+  FRAMEWORK_ANNEX_IV,
+  FRAMEWORK_ART12,
+  FRAMEWORK_ART9,
+  FRAMEWORK_ART6,
+} from "../src";
 
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
@@ -80,6 +87,50 @@ describe("createComplianceReport", () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
     expect(body).toEqual({ framework: "eu_ai_act_art6", action_id: "act-1" });
     expect(body.period_start).toBeUndefined();
+  });
+
+  it("accepts FRAMEWORK_ANNEX_IV and round-trips it on the response", async () => {
+    const aira = new Aira({
+      apiKey: "aira_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      baseUrl: "http://test",
+    });
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(201, {
+        ...REPORT_OK,
+        id: "rep-annex",
+        framework: FRAMEWORK_ANNEX_IV,
+        report_metadata: {
+          annex: "IV",
+          article_reference: "11",
+          sections: {
+            section_1_general: { provider_name: "Acme" },
+          },
+        },
+      }),
+    );
+
+    const report = await aira.createComplianceReport({
+      framework: FRAMEWORK_ANNEX_IV,
+      periodStart: "2026-04-01T00:00:00",
+      periodEnd: "2026-04-30T00:00:00",
+    });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
+    expect(body.framework).toBe("eu_ai_act_annex_iv");
+    expect(report.framework).toBe("eu_ai_act_annex_iv");
+    expect(report.report_metadata).toBeDefined();
+    expect((report.report_metadata as Record<string, unknown>).annex).toBe("IV");
+  });
+});
+
+describe("framework constants", () => {
+  it("have the exact wire values the backend expects", () => {
+    // Pin the strings — if the backend renames any of these, our
+    // CI should fail here before callers do.
+    expect(FRAMEWORK_ART12).toBe("eu_ai_act_art12");
+    expect(FRAMEWORK_ART9).toBe("eu_ai_act_art9");
+    expect(FRAMEWORK_ART6).toBe("eu_ai_act_art6");
+    expect(FRAMEWORK_ANNEX_IV).toBe("eu_ai_act_annex_iv");
   });
 });
 
