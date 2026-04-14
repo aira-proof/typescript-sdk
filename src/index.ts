@@ -5,6 +5,10 @@ export { OfflineQueue } from "./offline";
 export type { QueuedRequest } from "./offline";
 export {
   AiraError,
+  FRAMEWORK_ANNEX_IV,
+  FRAMEWORK_ART12,
+  FRAMEWORK_ART9,
+  FRAMEWORK_ART6,
   type Authorization,
   type ActionReceipt,
   type ActionDetail,

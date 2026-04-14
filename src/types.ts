@@ -1,4 +1,15 @@
 /**
+ * Compliance framework identifiers — string values accepted by
+ * `Aira.createComplianceReport()` and returned on `ComplianceReport.framework`.
+ * Import these constants rather than hard-coding the wire strings so
+ * callers stay in lockstep with the backend if a name ever changes.
+ */
+export const FRAMEWORK_ART12 = "eu_ai_act_art12" as const;
+export const FRAMEWORK_ART9 = "eu_ai_act_art9" as const;
+export const FRAMEWORK_ART6 = "eu_ai_act_art6" as const;
+export const FRAMEWORK_ANNEX_IV = "eu_ai_act_annex_iv" as const;
+
+/**
  * Authorization result from `authorize()` — Step 1 of the two-step flow.
  *
  * Status tells you what to do next:

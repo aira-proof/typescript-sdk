@@ -734,12 +734,15 @@ export class Aira {
   // ==================== Compliance reports (Phase 1) ====================
 
   /**
-   * Generate a regulatory PDF report (Article 12 / 9 / 6).
+   * Generate a regulatory PDF report.
    *
    * Frameworks:
    * - `eu_ai_act_art12` — Annex VII technical file. Requires period.
    * - `eu_ai_act_art9` — risk management register. Requires period.
    * - `eu_ai_act_art6` — single-action explanation. Requires actionId.
+   * - `eu_ai_act_annex_iv` — full Annex IV technical documentation
+   *   (§§1..9). Requires period. Typical use: annual file for the
+   *   high-risk AI system provider obligations in Article 11.
    */
   async createComplianceReport(params: {
     framework: string;
