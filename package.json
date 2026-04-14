@@ -1,6 +1,6 @@
 {
   "name": "aira-sdk",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "The authorization and audit layer for AI agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

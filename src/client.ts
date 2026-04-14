@@ -3,7 +3,7 @@ import {
   CosignResult, EvidencePackage, ComplianceSnapshot, EscrowAccount, EscrowTransaction,
   VerifyResult, PaginatedList, AiraError,
   ComplianceReport, ComplianceReportListResponse, ComplianceReportVerification,
-  ActionExplanation,
+  ActionExplanation, ExplanationVerification,
 } from "./types";
 import { OfflineQueue, type QueuedRequest } from "./offline";
 import { AiraSession } from "./session";
@@ -819,10 +819,44 @@ export class Aira {
     );
   }
 
-  /** Article 6 right-to-explanation for a single action. */
+  /**
+   * Article 6 right-to-explanation for a single action.
+   *
+   * The response includes a cryptographic ``_envelope`` — verify it
+   * later with {@link verifyActionExplanation} (the verify endpoint
+   * is public, so anyone holding the JSON can re-check it).
+   */
   async getActionExplanation(actionId: string): Promise<ActionExplanation> {
     return this.get<ActionExplanation>(
       `/actions/${actionId}/explanation`,
+    );
+  }
+
+  /**
+   * Public verify — recompute an explanation envelope's signature.
+   *
+   * POSTs the full explanation JSON to the unauthenticated
+   * ``/verify/explanation`` endpoint. The server looks up the public
+   * key by ``_envelope.signing_key_id`` and re-derives the canonical
+   * content hash + Ed25519 signature.
+   *
+   * ``request_id`` is stripped before sending, so a saved JSON
+   * explanation verifies the same way regardless of whether the
+   * caller round-tripped it through their own logs.
+   */
+  async verifyActionExplanation(
+    explanation: ActionExplanation | Record<string, unknown>,
+  ): Promise<ExplanationVerification> {
+    const payload: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(explanation)) {
+      if (k === "request_id") continue;
+      payload[k] = v;
+    }
+    return this.request<ExplanationVerification>(
+      "POST",
+      "/verify/explanation",
+      { explanation: payload },
+      false, // public endpoint — no Authorization header
     );
   }
 
