@@ -27,4 +27,8 @@ export {
   type ActionExplanation,
   type ExplanationEnvelope,
   type ExplanationVerification,
+  type OutputPolicy,
+  type OutputPolicyUpdate,
+  type OutputScanFlags,
+  type OutputScanHit,
 } from "./types";
