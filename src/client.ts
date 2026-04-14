@@ -12,6 +12,48 @@ const DEFAULT_BASE_URL = "https://api.airaproof.com";
 const DEFAULT_TIMEOUT = 30_000;
 const MAX_DETAILS_LENGTH = 50_000;
 
+// Binary download endpoints retry on transient 5xx (server hiccups,
+// brief gateway issues). 3 attempts with exponential backoff
+// (250ms -> 500ms -> 1000ms) keeps the worst case under 2s while
+// absorbing the most common flakes. 4xx errors are NOT retried —
+// those indicate a real problem the caller needs to see.
+const DOWNLOAD_MAX_ATTEMPTS = 3;
+const DOWNLOAD_BACKOFF_BASE_MS = 250;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Run a fetch with retries on transient 5xx and network errors.
+ * Returns the final Response (which may itself be a 5xx after all
+ * attempts are exhausted — caller decides whether to throw).
+ */
+async function fetchWithRetry(
+  doFetch: () => Promise<Response>,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < DOWNLOAD_MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await doFetch();
+      if (res.status >= 500 && attempt < DOWNLOAD_MAX_ATTEMPTS - 1) {
+        await sleep(DOWNLOAD_BACKOFF_BASE_MS * 2 ** attempt);
+        continue;
+      }
+      return res;
+    } catch (err) {
+      lastErr = err;
+      if (attempt < DOWNLOAD_MAX_ATTEMPTS - 1) {
+        await sleep(DOWNLOAD_BACKOFF_BASE_MS * 2 ** attempt);
+        continue;
+      }
+      throw err;
+    }
+  }
+  // Unreachable in practice — the loop either returns or throws.
+  throw lastErr ?? new Error("download retry loop exited without a response");
+}
+
 function buildBody(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null));
 }
@@ -734,7 +776,12 @@ export class Aira {
     );
   }
 
-  /** Download the generated PDF as raw bytes (Uint8Array). */
+  /**
+   * Download the generated PDF as raw bytes (Uint8Array).
+   *
+   * Retries on transient 5xx and network errors (3 attempts,
+   * exponential backoff). 4xx responses surface immediately.
+   */
   async downloadComplianceReport(reportId: string): Promise<Uint8Array> {
     if (this.queue) {
       throw new AiraError(
@@ -746,13 +793,12 @@ export class Aira {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
     try {
-      const res = await fetch(
-        `${this.baseUrl}/compliance/reports/${reportId}/download`,
-        {
+      const res = await fetchWithRetry(() =>
+        fetch(`${this.baseUrl}/compliance/reports/${reportId}/download`, {
           method: "GET",
           headers: { Authorization: `Bearer ${this.apiKey}` },
           signal: controller.signal,
-        },
+        }),
       );
       if (!res.ok) {
         throw new AiraError(res.status, "DOWNLOAD_FAILED", res.statusText);
@@ -780,7 +826,12 @@ export class Aira {
     );
   }
 
-  /** Download the Article 6 explanation as a PDF. */
+  /**
+   * Download the Article 6 explanation as a PDF.
+   *
+   * Retries on transient 5xx and network errors (3 attempts,
+   * exponential backoff). 4xx responses surface immediately.
+   */
   async downloadActionExplanationPdf(actionId: string): Promise<Uint8Array> {
     if (this.queue) {
       throw new AiraError(
@@ -792,13 +843,12 @@ export class Aira {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeout);
     try {
-      const res = await fetch(
-        `${this.baseUrl}/actions/${actionId}/explanation/pdf`,
-        {
+      const res = await fetchWithRetry(() =>
+        fetch(`${this.baseUrl}/actions/${actionId}/explanation/pdf`, {
           method: "GET",
           headers: { Authorization: `Bearer ${this.apiKey}` },
           signal: controller.signal,
-        },
+        }),
       );
       if (!res.ok) {
         throw new AiraError(res.status, "DOWNLOAD_FAILED", res.statusText);
