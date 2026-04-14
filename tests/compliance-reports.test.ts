@@ -202,3 +202,68 @@ describe("downloadActionExplanationPdf", () => {
     expect(data).toBeInstanceOf(Uint8Array);
   });
 });
+
+describe("download retry behavior", () => {
+  it("retries on 5xx then succeeds", async () => {
+    const aira = new Aira({
+      apiKey: "aira_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      baseUrl: "http://test",
+    });
+    const fakePdf = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        statusText: "Unavailable",
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+      })
+      .mockResolvedValueOnce(mockBinaryResponse(fakePdf));
+
+    const data = await aira.downloadComplianceReport("rep-1");
+    expect(data).toBeInstanceOf(Uint8Array);
+    expect(data.length).toBe(4);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("does NOT retry on 4xx", async () => {
+    const aira = new Aira({
+      apiKey: "aira_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      baseUrl: "http://test",
+    });
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+    });
+    await expect(aira.downloadComplianceReport("rep-bad")).rejects.toThrow(
+      AiraError,
+    );
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives up after 3 attempts on persistent 5xx", async () => {
+    const aira = new Aira({
+      apiKey: "aira_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      baseUrl: "http://test",
+    });
+    for (let i = 0; i < 3; i++) {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "Server Error",
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
+      });
+    }
+    await expect(aira.downloadComplianceReport("rep-1")).rejects.toThrow(
+      AiraError,
+    );
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+});
