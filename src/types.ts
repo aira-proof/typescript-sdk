@@ -41,7 +41,49 @@ export interface ActionReceipt {
   payload_hash: string | null;
   signature: string | null;
   timestamp_token: string | null;
+  /**
+   * Output content-scan result attached at notarize time when the
+   * org has an output policy enabled. ``null`` when output filtering
+   * is off (global flag or per-org).
+   */
+  output_scan_flags?: OutputScanFlags | null;
   warnings: string[] | null;
+}
+
+export interface OutputScanHit {
+  name: string;
+  library: string;
+  severity: "info" | "warning" | "critical";
+  description: string;
+  matches: number;
+  /** Always `"[REDACTED]"` — the matched fragment never travels. */
+  sample: string;
+}
+
+export interface OutputScanFlags {
+  scanned_at: string;
+  libraries: string[];
+  mode: "flag" | "deny" | "redact";
+  decision: "allow" | "require_approval" | "deny";
+  worst_severity: "info" | "warning" | "critical" | null;
+  hits: OutputScanHit[];
+}
+
+export interface OutputPolicy {
+  enabled: boolean;
+  mode: "flag" | "deny" | "redact";
+  libraries: string[];
+  deny_severity_threshold: "info" | "warning" | "critical";
+  redact_severity_threshold: "info" | "warning" | "critical";
+  request_id: string;
+}
+
+export interface OutputPolicyUpdate {
+  enabled?: boolean;
+  mode?: "flag" | "deny" | "redact";
+  libraries?: string[];
+  deny_severity_threshold?: "info" | "warning" | "critical";
+  redact_severity_threshold?: "info" | "warning" | "critical";
 }
 
 /** Full action details including receipt and authorizations. */

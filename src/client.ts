@@ -4,6 +4,7 @@ import {
   VerifyResult, PaginatedList, AiraError,
   ComplianceReport, ComplianceReportListResponse, ComplianceReportVerification,
   ActionExplanation, ExplanationVerification,
+  OutputPolicy, OutputPolicyUpdate,
 } from "./types";
 import { OfflineQueue, type QueuedRequest } from "./offline";
 import { AiraSession } from "./session";
@@ -147,6 +148,14 @@ export class Aira {
       return Promise.resolve({ _offline: true, _queue_id: qid } as unknown as T);
     }
     return this.request<T>("PUT", path, body);
+  }
+
+  private patch<T = Record<string, unknown>>(path: string, body: Record<string, unknown>): Promise<T> {
+    if (this.queue) {
+      const qid = this.queue.enqueue("PATCH", path, body);
+      return Promise.resolve({ _offline: true, _queue_id: qid } as unknown as T);
+    }
+    return this.request<T>("PATCH", path, body);
   }
 
   private del<T = Record<string, unknown>>(path: string): Promise<T> {
@@ -820,6 +829,38 @@ export class Aira {
     return this.get<ComplianceReportVerification>(
       `/compliance/reports/${reportId}/verify`,
     );
+  }
+
+  // ==================== Output content-scan policy ====================
+
+  /**
+   * Return the org's output content-scan policy.
+   *
+   * Scans apply to the `outcomeDetails` passed to `notarize()`. Mode
+   * controls behaviour:
+   *  - `flag` — hits are recorded on the receipt, nothing blocked
+   *  - `deny` — a hit at or above `deny_severity_threshold` makes
+   *    notarize return 422 with code `OUTPUT_SCAN_VIOLATION`
+   *  - `redact` — matched spans are replaced with `[REDACTED]` and
+   *    the receipt signs over the cleaned bytes
+   */
+  async getOutputPolicy(): Promise<OutputPolicy> {
+    return this.get<OutputPolicy>("/output-policies");
+  }
+
+  /**
+   * Merge the supplied fields into the org's output content-scan
+   * policy. Omitted fields stay at their current values. Admin role
+   * required server-side.
+   */
+  async updateOutputPolicy(updates: OutputPolicyUpdate): Promise<OutputPolicy> {
+    // Strip undefined so they don't travel as `null` and accidentally
+    // reset server-side values.
+    const body: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(updates)) {
+      if (v !== undefined) body[k] = v;
+    }
+    return this.patch<OutputPolicy>("/output-policies", body);
   }
 
   /**
