@@ -21,4 +21,6 @@ export {
   type ComplianceReportListResponse,
   type ComplianceReportVerification,
   type ActionExplanation,
+  type ExplanationEnvelope,
+  type ExplanationVerification,
 } from "./types";

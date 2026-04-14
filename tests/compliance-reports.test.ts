@@ -184,12 +184,105 @@ describe("getActionExplanation", () => {
         approval_chain: [],
         receipt: { receipt_id: "rec-1" },
         regulation: { framework: "eu_ai_act" },
+        _envelope: {
+          alg: "Ed25519",
+          signing_key_id: "aira-signing-key-v1",
+          content_hash: "sha256:abc",
+          signature: "ed25519:sig",
+          generated_at: "2026-04-12T00:00:00Z",
+        },
         request_id: "req-4",
       }),
     );
     const explanation = await aira.getActionExplanation("act-1");
     expect((explanation.action as { id: string }).id).toBe("act-1");
     expect(explanation.receipt).not.toBeNull();
+    expect(explanation._envelope?.signature).toBe("ed25519:sig");
+  });
+});
+
+describe("verifyActionExplanation", () => {
+  it("posts explanation to the public /verify/explanation endpoint without auth", async () => {
+    const aira = new Aira({
+      apiKey: "aira_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      baseUrl: "http://test",
+    });
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(200, {
+        valid: true,
+        checks: {
+          key_known: true,
+          content_hash_matches: true,
+          signature_valid: true,
+        },
+        signing_key_id: "aira-signing-key-v1",
+        request_id: "req-v",
+      }),
+    );
+
+    const explanation = {
+      action: { id: "act-1" },
+      policy_chain: [],
+      approval_chain: [],
+      receipt: null,
+      regulation: { framework: "eu_ai_act" },
+      _envelope: {
+        alg: "Ed25519",
+        signing_key_id: "aira-signing-key-v1",
+        content_hash: "sha256:abc",
+        signature: "ed25519:sig",
+        generated_at: "2026-04-12T00:00:00Z",
+      },
+      request_id: "req-4",
+    };
+    const result = await aira.verifyActionExplanation(explanation);
+    expect(result.valid).toBe(true);
+    expect(result.signing_key_id).toBe("aira-signing-key-v1");
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain("/verify/explanation");
+    expect(init.method).toBe("POST");
+    // Public endpoint — no Authorization header.
+    expect(init.headers.Authorization).toBeUndefined();
+    const body = JSON.parse(init.body);
+    // request_id must be stripped before POST — it's excluded from
+    // the signed canonical payload so the server recomputes hashes
+    // without it.
+    expect("request_id" in body.explanation).toBe(false);
+    expect(body.explanation._envelope.signature).toBe("ed25519:sig");
+  });
+
+  it("accepts a plain dict (saved JSON export) and reports invalid on tamper", async () => {
+    const aira = new Aira({
+      apiKey: "aira_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      baseUrl: "http://test",
+    });
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(200, {
+        valid: false,
+        checks: {
+          content_hash_matches:
+            "Re-derived hash does not match envelope's content_hash.",
+          signature_valid: "Signature did not verify against the public key.",
+        },
+        signing_key_id: "k1",
+        request_id: "req-v",
+      }),
+    );
+
+    const tampered = {
+      action: { id: "act-1", status: "tampered" },
+      policy_chain: [],
+      approval_chain: [],
+      receipt: null,
+      regulation: {},
+      _envelope: { signature: "ed25519:sig" },
+    };
+    const result = await aira.verifyActionExplanation(
+      tampered as unknown as Parameters<typeof aira.verifyActionExplanation>[0],
+    );
+    expect(result.valid).toBe(false);
+    expect(typeof result.checks.content_hash_matches).toBe("string");
   });
 });
 

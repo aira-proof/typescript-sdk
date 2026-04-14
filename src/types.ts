@@ -272,11 +272,34 @@ export interface ComplianceReportVerification {
   request_id: string;
 }
 
+export interface ExplanationEnvelope {
+  alg: string;
+  signing_key_id: string;
+  content_hash: string;
+  signature: string;
+  generated_at: string;
+}
+
 export interface ActionExplanation {
   action: Record<string, unknown>;
   policy_chain: Array<Record<string, unknown>>;
   approval_chain: Array<Record<string, unknown>>;
   receipt?: Record<string, unknown> | null;
   regulation: Record<string, unknown>;
+  /**
+   * Ed25519 signature over the canonical JSON of every field above
+   * (except ``_envelope`` itself and ``request_id``). The on-wire key
+   * is ``_envelope`` — the SDK exposes it under the same name so a
+   * saved ``JSON.stringify(explanation)`` round-trips through
+   * :meth:`Aira.verifyActionExplanation` untouched.
+   */
+  _envelope?: ExplanationEnvelope;
+  request_id: string;
+}
+
+export interface ExplanationVerification {
+  valid: boolean;
+  checks: Record<string, unknown>;
+  signing_key_id?: string | null;
   request_id: string;
 }
