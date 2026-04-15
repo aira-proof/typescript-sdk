@@ -5,6 +5,7 @@ import {
   ComplianceReport, ComplianceReportListResponse, ComplianceReportVerification,
   ActionExplanation, ExplanationVerification,
   OutputPolicy, OutputPolicyUpdate,
+  DoraIncident, IctThirdParty, DoraTest,
 } from "./types";
 import { OfflineQueue, type QueuedRequest } from "./offline";
 import { AiraSession } from "./session";
@@ -861,6 +862,221 @@ export class Aira {
       if (v !== undefined) body[k] = v;
     }
     return this.patch<OutputPolicy>("/output-policies", body);
+  }
+
+  // ==================== DORA (EU 2022/2554) ====================
+
+  /** Open a new DORA ICT incident (Article 17). */
+  async createDoraIncident(params: {
+    title: string;
+    description: string;
+    detectedAt: string;
+    affectedServices?: string[];
+    clientsAffectedCount?: number;
+    geographicScope?: string[];
+    relatedActionUuids?: string[];
+  }): Promise<DoraIncident> {
+    const body = buildBody({
+      title: params.title,
+      description: params.description,
+      detected_at: params.detectedAt,
+      affected_services: params.affectedServices,
+      clients_affected_count: params.clientsAffectedCount,
+      geographic_scope: params.geographicScope,
+      related_action_uuids: params.relatedActionUuids,
+    });
+    return this.post<DoraIncident>("/dora/incidents", body);
+  }
+
+  /** List DORA incidents with optional filters. */
+  async listDoraIncidents(params?: {
+    status?: string;
+    severity?: string;
+    isMajor?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: DoraIncident[]; total: number; limit: number; offset: number; request_id: string }> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.append("status", params.status);
+    if (params?.severity) qs.append("severity", params.severity);
+    if (params?.isMajor !== undefined) qs.append("is_major", String(params.isMajor));
+    if (params?.limit !== undefined) qs.append("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.append("offset", String(params.offset));
+    const path = qs.toString() ? `/dora/incidents?${qs}` : "/dora/incidents";
+    return this.get(path);
+  }
+
+  /** Get one DORA incident. */
+  async getDoraIncident(incidentUuid: string): Promise<DoraIncident> {
+    return this.get<DoraIncident>(`/dora/incidents/${incidentUuid}`);
+  }
+
+  /** Classify a detected incident (Article 18). */
+  async classifyDoraIncident(
+    incidentUuid: string,
+    params: {
+      severity: "critical" | "high" | "medium" | "low";
+      category: string;
+      isMajor?: boolean;
+      rootCauseSummary?: string;
+      rootCauseClassification?: string;
+      thirdPartyUuid?: string;
+    },
+  ): Promise<DoraIncident> {
+    const body = buildBody({
+      severity: params.severity,
+      category: params.category,
+      is_major: params.isMajor,
+      root_cause_summary: params.rootCauseSummary,
+      root_cause_classification: params.rootCauseClassification,
+      third_party_uuid: params.thirdPartyUuid,
+    });
+    return this.put<DoraIncident>(
+      `/dora/incidents/${incidentUuid}/classify`,
+      body,
+    );
+  }
+
+  /** Mark an incident resolved + record post-mortem fields. */
+  async resolveDoraIncident(
+    incidentUuid: string,
+    params: {
+      resolutionSummary: string;
+      lessonsLearned?: string;
+      resolvedAt?: string;
+    },
+  ): Promise<DoraIncident> {
+    const body = buildBody({
+      resolution_summary: params.resolutionSummary,
+      lessons_learned: params.lessonsLearned,
+      resolved_at: params.resolvedAt,
+    });
+    return this.put<DoraIncident>(
+      `/dora/incidents/${incidentUuid}/resolve`,
+      body,
+    );
+  }
+
+  /** Generate (if needed) and download the major-incident PDF for ESA submission. */
+  async downloadDoraIncidentReport(incidentUuid: string): Promise<Uint8Array> {
+    if (this.queue) {
+      throw new AiraError(0, "OFFLINE", "Downloads not available offline");
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeout);
+    try {
+      const res = await fetchWithRetry(() =>
+        fetch(`${this.baseUrl}/dora/incidents/${incidentUuid}/report`, {
+          method: "GET",
+          headers: { Authorization: `Bearer ${this.apiKey}` },
+          signal: controller.signal,
+        }),
+      );
+      if (!res.ok) {
+        throw new AiraError(res.status, "DOWNLOAD_FAILED", res.statusText);
+      }
+      return new Uint8Array(await res.arrayBuffer());
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Add a vendor to the ICT third-party register (Article 28). */
+  async createIctThirdParty(params: {
+    vendorName: string;
+    serviceDescription: string;
+    serviceType: string;
+    criticality: "critical" | "non_critical" | "supporting";
+    contractStartDate?: string;
+    contractEndDate?: string;
+    exitStrategySummary?: string;
+    subcontractors?: string[];
+    dataCategories?: string[];
+    jurisdiction?: string;
+  }): Promise<IctThirdParty> {
+    const body = buildBody({
+      vendor_name: params.vendorName,
+      service_description: params.serviceDescription,
+      service_type: params.serviceType,
+      criticality: params.criticality,
+      contract_start_date: params.contractStartDate,
+      contract_end_date: params.contractEndDate,
+      exit_strategy_summary: params.exitStrategySummary,
+      subcontractors: params.subcontractors,
+      data_categories: params.dataCategories,
+      jurisdiction: params.jurisdiction,
+    });
+    return this.post<IctThirdParty>("/dora/third-parties", body);
+  }
+
+  /** List ICT third-party register entries. */
+  async listIctThirdParties(params?: {
+    criticality?: string;
+    isActive?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: IctThirdParty[]; total: number; limit: number; offset: number; request_id: string }> {
+    const qs = new URLSearchParams();
+    if (params?.criticality) qs.append("criticality", params.criticality);
+    if (params?.isActive !== undefined) qs.append("is_active", String(params.isActive));
+    if (params?.limit !== undefined) qs.append("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.append("offset", String(params.offset));
+    const path = qs.toString() ? `/dora/third-parties?${qs}` : "/dora/third-parties";
+    return this.get(path);
+  }
+
+  async getIctThirdParty(thirdPartyUuid: string): Promise<IctThirdParty> {
+    return this.get<IctThirdParty>(`/dora/third-parties/${thirdPartyUuid}`);
+  }
+
+  /** PATCH semantics — only supplied fields change. */
+  async updateIctThirdParty(
+    thirdPartyUuid: string,
+    fields: Partial<IctThirdParty> & { is_active?: boolean },
+  ): Promise<IctThirdParty> {
+    return this.put<IctThirdParty>(
+      `/dora/third-parties/${thirdPartyUuid}`,
+      fields as Record<string, unknown>,
+    );
+  }
+
+  /** Log a DORA resilience test (Articles 24-27). */
+  async createDoraTest(params: {
+    testType: string;
+    title: string;
+    scope: string;
+    conductedAt: string;
+    conductedBy: string;
+    status: "passed" | "failed" | "partial";
+    findingsSummary?: string;
+    remediationPlan?: string;
+    remediationDueAt?: string;
+  }): Promise<DoraTest> {
+    const body = buildBody({
+      test_type: params.testType,
+      title: params.title,
+      scope: params.scope,
+      conducted_at: params.conductedAt,
+      conducted_by: params.conductedBy,
+      status: params.status,
+      findings_summary: params.findingsSummary,
+      remediation_plan: params.remediationPlan,
+      remediation_due_at: params.remediationDueAt,
+    });
+    return this.post<DoraTest>("/dora/tests", body);
+  }
+
+  async listDoraTests(params?: {
+    testType?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: DoraTest[]; total: number; limit: number; offset: number; request_id: string }> {
+    const qs = new URLSearchParams();
+    if (params?.testType) qs.append("test_type", params.testType);
+    if (params?.limit !== undefined) qs.append("limit", String(params.limit));
+    if (params?.offset !== undefined) qs.append("offset", String(params.offset));
+    const path = qs.toString() ? `/dora/tests?${qs}` : "/dora/tests";
+    return this.get(path);
   }
 
   /**
