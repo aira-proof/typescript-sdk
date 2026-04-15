@@ -90,7 +90,7 @@ export class AiraVercelMiddleware {
         modelId: this.modelId,
       });
       if (auth.status === "authorized") {
-        await this.client.notarize({ actionId: auth.action_id, outcome: "completed" });
+        await this.client.notarize({ actionId: auth.action_uuid, outcome: "completed" });
       }
       // If pending_approval — just leave it; nothing to execute for audit-only.
     } catch (e) {
@@ -170,12 +170,12 @@ export class AiraVercelMiddleware {
         });
         if (auth.status === "pending_approval") {
           const err = new Error(
-            `Aira: tool '${toolName}' is pending human approval (action_id=${auth.action_id}). Tool execution blocked.`,
+            `Aira: tool '${toolName}' is pending human approval (action_uuid=${auth.action_uuid}). Tool execution blocked.`,
           );
           (err as Error & { code?: string }).code = "PENDING_APPROVAL";
           throw err;
         }
-        actionId = auth.action_id;
+        actionId = auth.action_uuid;
       } catch (e) {
         const err = e as Error & { code?: string };
         if (err.code === "POLICY_DENIED" || err.code === "PENDING_APPROVAL") throw e;

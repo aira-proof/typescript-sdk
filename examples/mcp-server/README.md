@@ -84,9 +84,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
    - notarize_action: Notarize an AI agent action with a cryptographic receipt
      Required: [action_type, details]
    - verify_action: Verify a notarized action's cryptographic receipt
-     Required: [action_id]
+     Required: [action_uuid]
    - get_receipt: Get the cryptographic receipt for a notarized action
-     Required: [receipt_id]
+     Required: [receipt_uuid]
 
 2. Call: notarize_action
 ----------------------------------------

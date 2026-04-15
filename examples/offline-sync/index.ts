@@ -99,12 +99,12 @@ async function main() {
 
   // After sync, each result is an Authorization. The agent now needs to
   // notarize the outcome of each action (we switch to an online client
-  // because the second leg is a sequential per-action_id POST).
+  // because the second leg is a sequential per-action_uuid POST).
   const onlineAira = new Aira({ apiKey: AIRA_API_KEY! });
   const receipts: Record<string, unknown>[] = [];
   for (let i = 0; i < results.length; i++) {
     const authResult = results[i];
-    const actionId = authResult.action_id as string | undefined;
+    const actionId = authResult.action_uuid as string | undefined;
     const status = (authResult.status as string) ?? "unknown";
     console.log(`   [${i + 1}] ${(actionId ?? "n/a").slice(0, 20)}...  status: ${status}`);
 
@@ -118,8 +118,8 @@ async function main() {
   console.log("\n4. Verify receipt");
   console.log("-".repeat(40));
 
-  if (receipts.length > 0 && receipts[0].action_id) {
-    const verify = await onlineAira.verifyAction(receipts[0].action_id as string);
+  if (receipts.length > 0 && receipts[0].action_uuid) {
+    const verify = await onlineAira.verifyAction(receipts[0].action_uuid as string);
     console.log(`   Valid:     ${verify.valid}`);
     console.log(`   Key:       ${verify.public_key_id}`);
     console.log(`   Receipt:   ${verify.message.slice(0, 50)}...`);

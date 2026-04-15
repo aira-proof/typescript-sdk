@@ -2,16 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getTools, handleToolCall, createServer } from "../src/extras/mcp";
 
 const mockAuthorize = vi.fn().mockResolvedValue({
-  action_id: "a1",
+  action_uuid: "a1",
   status: "authorized",
   created_at: "2026-04-07T00:00:00Z",
   request_id: "req-1",
   warnings: null,
 });
 const mockNotarize = vi.fn().mockResolvedValue({
-  action_id: "a1",
+  action_uuid: "a1",
   status: "notarized",
-  receipt_id: "r1",
+  receipt_uuid: "r1",
   signature: "ed25519:abc",
   payload_hash: "sha256:abc",
   timestamp_token: null,
@@ -19,9 +19,9 @@ const mockNotarize = vi.fn().mockResolvedValue({
   request_id: "req-2",
   warnings: null,
 });
-const mockGetAction = vi.fn().mockResolvedValue({ action_id: "a1", action_type: "test" });
+const mockGetAction = vi.fn().mockResolvedValue({ action_uuid: "a1", action_type: "test" });
 const mockVerifyAction = vi.fn().mockResolvedValue({ valid: true, message: "OK" });
-const mockGetReceipt = vi.fn().mockResolvedValue({ receipt_id: "r1", signature: "ed25519:xyz" });
+const mockGetReceipt = vi.fn().mockResolvedValue({ receipt_uuid: "r1", signature: "ed25519:xyz" });
 const mockResolveDid = vi.fn().mockResolvedValue({
   did: "did:web:airaproof.com:agents:partner",
   document: {},
@@ -39,7 +39,7 @@ const mockGetReputation = vi.fn().mockResolvedValue({
   tier: "trusted",
   total_attestations: 12,
 });
-const mockRequestMutualSign = vi.fn().mockResolvedValue({ status: "pending", action_id: "a1" });
+const mockRequestMutualSign = vi.fn().mockResolvedValue({ status: "pending", action_uuid: "a1" });
 
 const mockClient = {
   authorize: mockAuthorize,
@@ -94,10 +94,10 @@ describe("MCP tools", () => {
     expect(required).toContain("details");
   });
 
-  it("notarize_action requires action_id", () => {
+  it("notarize_action requires action_uuid", () => {
     const tool = getTools().find((t) => t.name === "notarize_action")!;
     const required = tool.inputSchema.required as string[];
-    expect(required).toContain("action_id");
+    expect(required).toContain("action_uuid");
   });
 });
 
@@ -110,7 +110,7 @@ describe("handleToolCall", () => {
     });
 
     const parsed = JSON.parse(result[0].text);
-    expect(parsed.action_id).toBe("a1");
+    expect(parsed.action_uuid).toBe("a1");
     expect(parsed.status).toBe("authorized");
     expect(mockAuthorize).toHaveBeenCalledWith({
       actionType: "email_sent",
@@ -140,7 +140,7 @@ describe("handleToolCall", () => {
 
   it("handles notarize_action with completed outcome", async () => {
     const result = await handleToolCall(mockClient, "notarize_action", {
-      action_id: "a1",
+      action_uuid: "a1",
       outcome: "completed",
       outcome_details: "Sent successfully",
     });
@@ -157,7 +157,7 @@ describe("handleToolCall", () => {
 
   it("handles notarize_action with failed outcome", async () => {
     await handleToolCall(mockClient, "notarize_action", {
-      action_id: "a1",
+      action_uuid: "a1",
       outcome: "failed",
       outcome_details: "Rejected by bank",
     });
@@ -168,27 +168,27 @@ describe("handleToolCall", () => {
   });
 
   it("defaults notarize_action outcome to completed", async () => {
-    await handleToolCall(mockClient, "notarize_action", { action_id: "a1" });
+    await handleToolCall(mockClient, "notarize_action", { action_uuid: "a1" });
     expect(mockNotarize).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "completed" }),
     );
   });
 
   it("handles get_action", async () => {
-    const result = await handleToolCall(mockClient, "get_action", { action_id: "a1" });
-    expect(JSON.parse(result[0].text)).toHaveProperty("action_id", "a1");
+    const result = await handleToolCall(mockClient, "get_action", { action_uuid: "a1" });
+    expect(JSON.parse(result[0].text)).toHaveProperty("action_uuid", "a1");
     expect(mockGetAction).toHaveBeenCalledWith("a1");
   });
 
   it("handles verify_action", async () => {
-    const result = await handleToolCall(mockClient, "verify_action", { action_id: "act-1" });
+    const result = await handleToolCall(mockClient, "verify_action", { action_uuid: "act-1" });
     expect(JSON.parse(result[0].text)).toHaveProperty("valid", true);
     expect(mockVerifyAction).toHaveBeenCalledWith("act-1");
   });
 
   it("handles get_receipt", async () => {
-    const result = await handleToolCall(mockClient, "get_receipt", { receipt_id: "r1" });
-    expect(JSON.parse(result[0].text)).toHaveProperty("receipt_id", "r1");
+    const result = await handleToolCall(mockClient, "get_receipt", { receipt_uuid: "r1" });
+    expect(JSON.parse(result[0].text)).toHaveProperty("receipt_uuid", "r1");
     expect(mockGetReceipt).toHaveBeenCalledWith("r1");
   });
 
@@ -233,7 +233,7 @@ describe("handleToolCall", () => {
 
   it("handles request_mutual_sign", async () => {
     const result = await handleToolCall(mockClient, "request_mutual_sign", {
-      action_id: "a1",
+      action_uuid: "a1",
       counterparty_did: "did:web:airaproof.com:agents:partner",
     });
     expect(JSON.parse(result[0].text)).toHaveProperty("status", "pending");
@@ -256,7 +256,7 @@ describe("createServer", () => {
   it("callTool delegates to handleToolCall", async () => {
     const server = createServer(mockClient);
     const result = await server.callTool({
-      params: { name: "verify_action", arguments: { action_id: "act-1" } },
+      params: { name: "verify_action", arguments: { action_uuid: "act-1" } },
     });
     expect(result.content).toHaveLength(1);
     expect(JSON.parse(result.content[0].text)).toHaveProperty("valid", true);

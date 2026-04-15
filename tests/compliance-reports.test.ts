@@ -33,7 +33,7 @@ const REPORT_OK = {
   id: "rep-1",
   framework: "eu_ai_act_art12",
   status: "ready",
-  org_id: "org-1",
+  org_uuid: "org-1",
   period_start: "2026-04-01T00:00:00",
   period_end: "2026-04-30T00:00:00",
   receipt_count: 2,
@@ -85,7 +85,7 @@ describe("createComplianceReport", () => {
     });
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body as string);
-    expect(body).toEqual({ framework: "eu_ai_act_art6", action_id: "act-1" });
+    expect(body).toEqual({ framework: "eu_ai_act_art6", action_uuid: "act-1" });
     expect(body.period_start).toBeUndefined();
   });
 
@@ -212,7 +212,7 @@ describe("verifyComplianceReport", () => {
     const aira = new Aira({ apiKey: "aira_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", baseUrl: "http://test" });
     mockFetch.mockResolvedValueOnce(
       mockJsonResponse(200, {
-        report_id: "rep-1",
+        report_uuid: "rep-1",
         valid: true,
         checks: { content_hash_matches: true, signature_valid: true },
         descriptor: { framework: "eu_ai_act_art12" },
@@ -233,7 +233,7 @@ describe("getActionExplanation", () => {
         action: { id: "act-1" },
         policy_chain: [],
         approval_chain: [],
-        receipt: { receipt_id: "rec-1" },
+        receipt: { receipt_uuid: "rec-1" },
         regulation: { framework: "eu_ai_act" },
         _envelope: {
           alg: "Ed25519",

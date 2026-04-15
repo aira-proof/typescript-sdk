@@ -48,7 +48,7 @@ Or test with curl:
 ```bash
 # Generate a test signature
 SECRET="whsec_xxx"
-PAYLOAD='{"event":"action.notarized","data":{"action_id":"act_123","action_type":"test"}}'
+PAYLOAD='{"event":"action.notarized","data":{"action_uuid":"act_123","action_type":"test"}}'
 SIG="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$SECRET" | cut -d' ' -f2)"
 
 curl -X POST http://localhost:5000/webhook \

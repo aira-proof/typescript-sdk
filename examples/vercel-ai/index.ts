@@ -78,7 +78,7 @@ async function main() {
 
   if (actions.data.length > 0) {
     const latest = actions.data[0];
-    const verify = await aira.verifyAction(latest.action_id);
+    const verify = await aira.verifyAction(latest.action_uuid);
     console.log(`   Valid: ${verify.valid}`);
     console.log(`   Signature key: ${verify.public_key_id}`);
     console.log(`   Receipt: ${verify.message.slice(0, 60)}...`);

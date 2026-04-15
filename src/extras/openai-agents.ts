@@ -74,7 +74,7 @@ export class AiraGuardrail {
   /**
    * REAL GATE: call `authorize()` for a tool invocation.
    *
-   * Returns the action_id on success, throws on POLICY_DENIED or
+   * Returns the action_uuid on success, throws on POLICY_DENIED or
    * pending_approval. Arg keys are logged (not values) to avoid leaking
    * sensitive user input into audit trails.
    */
@@ -89,12 +89,12 @@ export class AiraGuardrail {
       });
       if (auth.status === "pending_approval") {
         const err = new Error(
-          `Aira: tool '${toolName}' is pending human approval (action_id=${auth.action_id}). Tool execution blocked.`,
+          `Aira: tool '${toolName}' is pending human approval (action_uuid=${auth.action_uuid}). Tool execution blocked.`,
         );
         (err as Error & { code?: string }).code = "PENDING_APPROVAL";
         throw err;
       }
-      return auth.action_id;
+      return auth.action_uuid;
     } catch (e) {
       const err = e as Error & { code?: string };
       // Always propagate authorization-layer rejections.

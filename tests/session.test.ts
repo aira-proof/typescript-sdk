@@ -15,7 +15,7 @@ function mockResponse(status: number, body: Record<string, unknown>) {
 }
 
 const authResponse = {
-  action_id: "act-1",
+  action_uuid: "act-1",
   status: "authorized",
   created_at: "2026-04-07T00:00:00Z",
   request_id: "req-1",
@@ -23,11 +23,11 @@ const authResponse = {
 };
 
 const receiptResponse = {
-  action_id: "act-1",
+  action_uuid: "act-1",
   status: "notarized",
   created_at: "2026-04-07T00:00:01Z",
   request_id: "req-2",
-  receipt_id: "rct-1",
+  receipt_uuid: "rct-1",
   payload_hash: "sha256:abc",
   signature: "ed25519:xyz",
   timestamp_token: null,
@@ -81,7 +81,7 @@ describe("AiraSession", () => {
     const session = aira.session("agent-1");
     const auth = await session.authorize({ actionType: "test", details: "d" });
 
-    expect(auth.action_id).toBe("act-1");
+    expect(auth.action_uuid).toBe("act-1");
     expect(auth.status).toBe("authorized");
   });
 
@@ -90,7 +90,7 @@ describe("AiraSession", () => {
     const session = aira.session("agent-1");
     const receipt = await session.notarize({ actionId: "act-1", outcome: "completed" });
 
-    expect(receipt.action_id).toBe("act-1");
+    expect(receipt.action_uuid).toBe("act-1");
     expect(receipt.signature).toBe("ed25519:xyz");
     expect(mockFetch.mock.calls[0][0]).toContain("/actions/act-1/notarize");
   });
@@ -106,7 +106,7 @@ describe("AiraSession", () => {
     expect(auth.status).toBe("authorized");
 
     const receipt = await session.notarize({
-      actionId: auth.action_id,
+      actionId: auth.action_uuid,
       outcome: "completed",
     });
     expect(receipt.status).toBe("notarized");

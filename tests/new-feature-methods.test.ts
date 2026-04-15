@@ -43,7 +43,7 @@ describe("authorize() with replay context", () => {
   it("passes the new optional fields through to the body", async () => {
     mockFetch.mockResolvedValueOnce(
       mockResponse(201, {
-        action_id: "a1",
+        action_uuid: "a1",
         status: "authorized",
         created_at: "2026-04-11T10:00:00Z",
         request_id: "r1",
@@ -72,7 +72,7 @@ describe("authorize() with replay context", () => {
   it("omits the replay context fields when not supplied", async () => {
     mockFetch.mockResolvedValueOnce(
       mockResponse(201, {
-        action_id: "a1",
+        action_uuid: "a1",
         status: "authorized",
         created_at: "x",
         request_id: "r",
@@ -92,7 +92,7 @@ describe("authorize() with replay context", () => {
 describe("getReplayContext", () => {
   it("fetches the replay context bundle for an action", async () => {
     const expected = {
-      action_id: "a1",
+      action_uuid: "a1",
       system_prompt_hash: "sha256:abc",
       model_params: { temperature: 0.7 },
     };
@@ -143,7 +143,7 @@ describe("compliance bundles", () => {
   it("exports the self-contained JSON", async () => {
     mockFetch.mockResolvedValueOnce(
       mockResponse(200, {
-        bundle_id: "b1",
+        bundle_uuid: "b1",
         merkle_root: "abc",
         receipts: [],
         signing: { jwks_url: "https://api.airaproof.com/api/v1/.well-known/jwks.json" },
@@ -157,10 +157,10 @@ describe("compliance bundles", () => {
 
   it("returns inclusion proof", async () => {
     mockFetch.mockResolvedValueOnce(
-      mockResponse(200, { bundle_id: "b1", receipt_id: "r1", siblings: [] }),
+      mockResponse(200, { bundle_uuid: "b1", receipt_uuid: "r1", siblings: [] }),
     );
     const result = await aira.getBundleInclusionProof("b1", "r1");
-    expect(result.receipt_id).toBe("r1");
+    expect(result.receipt_uuid).toBe("r1");
   });
 });
 
@@ -262,8 +262,8 @@ describe("Merkle settlement", () => {
   it("returns inclusion proof for a settled receipt", async () => {
     mockFetch.mockResolvedValueOnce(
       mockResponse(200, {
-        settlement_id: "s1",
-        receipt_id: "r1",
+        settlement_uuid: "s1",
+        receipt_uuid: "r1",
         merkle_root: "abc",
         leaf_hash: "h",
         index: 5,

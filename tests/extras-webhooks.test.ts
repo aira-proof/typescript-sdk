@@ -50,14 +50,14 @@ describe("parseEvent", () => {
   it("parses valid payload", () => {
     const payload = JSON.stringify({
       event: "action.notarized",
-      data: { action_id: "act-1" },
+      data: { action_uuid: "act-1" },
       timestamp: "2026-01-01T00:00:00Z",
       delivery_id: "del-1",
     });
 
     const event = parseEvent(payload);
     expect(event.eventType).toBe("action.notarized");
-    expect(event.data).toEqual({ action_id: "act-1" });
+    expect(event.data).toEqual({ action_uuid: "act-1" });
     expect(event.timestamp).toBe("2026-01-01T00:00:00Z");
     expect(event.deliveryId).toBe("del-1");
   });

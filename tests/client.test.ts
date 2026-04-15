@@ -20,7 +20,7 @@ function paginatedResponse(data: unknown[], total = 1) {
 
 function authorizationResponse(overrides: Partial<Record<string, unknown>> = {}) {
   return mockResponse(201, {
-    action_id: "act-1",
+    action_uuid: "act-1",
     status: "authorized",
     created_at: "2026-04-07T00:00:00Z",
     request_id: "req-1",
@@ -31,11 +31,11 @@ function authorizationResponse(overrides: Partial<Record<string, unknown>> = {})
 
 function receiptResponse(overrides: Partial<Record<string, unknown>> = {}) {
   return mockResponse(200, {
-    action_id: "act-1",
+    action_uuid: "act-1",
     status: "notarized",
     created_at: "2026-04-07T00:00:01Z",
     request_id: "req-2",
-    receipt_id: "rct-1",
+    receipt_uuid: "rct-1",
     payload_hash: "sha256:abc",
     signature: "ed25519:xyz",
     timestamp_token: null,
@@ -98,7 +98,7 @@ describe("error handling", () => {
       mockResponse(403, {
         code: "POLICY_DENIED",
         message: "Blocked",
-        details: { action_id: "act-1", policy_id: "pol-1" },
+        details: { action_uuid: "act-1", policy_uuid: "pol-1" },
         request_id: "req-1",
       }),
     );
@@ -109,8 +109,8 @@ describe("error handling", () => {
       expect(e).toBeInstanceOf(AiraError);
       expect((e as AiraError).code).toBe("POLICY_DENIED");
       expect((e as AiraError).details).toEqual({
-        action_id: "act-1",
-        policy_id: "pol-1",
+        action_uuid: "act-1",
+        policy_uuid: "pol-1",
       });
     }
   });
@@ -134,7 +134,7 @@ describe("authorize (Step 1)", () => {
     });
 
     expect(auth.status).toBe("authorized");
-    expect(auth.action_id).toBe("act-1");
+    expect(auth.action_uuid).toBe("act-1");
     expect(auth.created_at).toBeDefined();
     expect(auth.request_id).toBeDefined();
 
@@ -149,7 +149,7 @@ describe("authorize (Step 1)", () => {
 
   it("returns pending_approval when require_approval is set", async () => {
     mockFetch.mockResolvedValue(
-      authorizationResponse({ status: "pending_approval", action_id: "act-pending" }),
+      authorizationResponse({ status: "pending_approval", action_uuid: "act-pending" }),
     );
 
     const auth = await aira.authorize({
@@ -160,7 +160,7 @@ describe("authorize (Step 1)", () => {
     });
 
     expect(auth.status).toBe("pending_approval");
-    expect(auth.action_id).toBe("act-pending");
+    expect(auth.action_uuid).toBe("act-pending");
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.require_approval).toBe(true);
@@ -245,7 +245,7 @@ describe("authorize (Step 1)", () => {
     expect(body.model_id).toBe("gpt-5");
     expect(body.model_version).toBe("2026-03");
     expect(body.instruction_hash).toBe("sha256:abc");
-    expect(body.parent_action_id).toBe("parent-1");
+    expect(body.parent_action_uuid).toBe("parent-1");
     expect(body.store_details).toBe(true);
   });
 });
@@ -259,10 +259,10 @@ describe("notarize (Step 2)", () => {
     const receipt = await aira.notarize({ actionId: "act-1", outcome: "completed" });
 
     expect(receipt.status).toBe("notarized");
-    expect(receipt.action_id).toBe("act-1");
+    expect(receipt.action_uuid).toBe("act-1");
     expect(receipt.signature).toBe("ed25519:xyz");
     expect(receipt.payload_hash).toBe("sha256:abc");
-    expect(receipt.receipt_id).toBe("rct-1");
+    expect(receipt.receipt_uuid).toBe("rct-1");
 
     const [url, opts] = mockFetch.mock.calls[0];
     expect(url).toContain("/api/v1/actions/act-1/notarize");
@@ -282,7 +282,7 @@ describe("notarize (Step 2)", () => {
     mockFetch.mockResolvedValue(
       receiptResponse({
         status: "failed",
-        receipt_id: null,
+        receipt_uuid: null,
         payload_hash: null,
         signature: null,
       }),
@@ -295,7 +295,7 @@ describe("notarize (Step 2)", () => {
     });
 
     expect(receipt.status).toBe("failed");
-    expect(receipt.receipt_id).toBeNull();
+    expect(receipt.receipt_uuid).toBeNull();
     expect(receipt.signature).toBeNull();
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -327,8 +327,8 @@ describe("notarize (Step 2)", () => {
 describe("full authorize → notarize flow", () => {
   it("authorizes, executes, then notarizes completed", async () => {
     mockFetch
-      .mockResolvedValueOnce(authorizationResponse({ action_id: "act-42" }))
-      .mockResolvedValueOnce(receiptResponse({ action_id: "act-42" }));
+      .mockResolvedValueOnce(authorizationResponse({ action_uuid: "act-42" }))
+      .mockResolvedValueOnce(receiptResponse({ action_uuid: "act-42" }));
 
     const auth = await aira.authorize({
       actionType: "wire_transfer",
@@ -340,13 +340,13 @@ describe("full authorize → notarize flow", () => {
     // ... agent executes the action here ...
 
     const receipt = await aira.notarize({
-      actionId: auth.action_id,
+      actionId: auth.action_uuid,
       outcome: "completed",
       outcomeDetails: "Wire ref=TXN123",
     });
 
     expect(receipt.status).toBe("notarized");
-    expect(receipt.action_id).toBe("act-42");
+    expect(receipt.action_uuid).toBe("act-42");
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
     // Verify the two URLs
@@ -356,7 +356,7 @@ describe("full authorize → notarize flow", () => {
 
   it("authorizes pending_approval, does NOT notarize (caller enqueues)", async () => {
     mockFetch.mockResolvedValueOnce(
-      authorizationResponse({ status: "pending_approval", action_id: "act-wait" }),
+      authorizationResponse({ status: "pending_approval", action_uuid: "act-wait" }),
     );
 
     const auth = await aira.authorize({
@@ -371,12 +371,12 @@ describe("full authorize → notarize flow", () => {
 
   it("authorizes, action fails, notarizes as failed", async () => {
     mockFetch
-      .mockResolvedValueOnce(authorizationResponse({ action_id: "act-fail" }))
+      .mockResolvedValueOnce(authorizationResponse({ action_uuid: "act-fail" }))
       .mockResolvedValueOnce(
         receiptResponse({
-          action_id: "act-fail",
+          action_uuid: "act-fail",
           status: "failed",
-          receipt_id: null,
+          receipt_uuid: null,
           payload_hash: null,
           signature: null,
         }),
@@ -384,7 +384,7 @@ describe("full authorize → notarize flow", () => {
 
     const auth = await aira.authorize({ actionType: "api_call", details: "Call partner" });
     const receipt = await aira.notarize({
-      actionId: auth.action_id,
+      actionId: auth.action_uuid,
       outcome: "failed",
       outcomeDetails: "Partner API returned 503",
     });
@@ -400,15 +400,15 @@ describe("cosign", () => {
   it("POSTs to /actions/:id/cosign", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(200, {
-        cosignature_id: "cos-1",
-        action_id: "act-1",
+        cosignature_uuid: "cos-1",
+        action_uuid: "act-1",
         cosigner_email: "manager@example.com",
         cosigned_at: "2026-04-07T00:00:00Z",
         request_id: "req-1",
       }),
     );
     const result = await aira.cosign({ actionId: "act-1" });
-    expect(result.cosignature_id).toBe("cos-1");
+    expect(result.cosignature_uuid).toBe("cos-1");
     expect(result.cosigner_email).toBe("manager@example.com");
     expect(mockFetch.mock.calls[0][0]).toContain("/actions/act-1/cosign");
     expect(mockFetch.mock.calls[0][1].method).toBe("POST");
@@ -420,14 +420,14 @@ describe("cosign", () => {
 describe("actions", () => {
   it("getAction", async () => {
     mockFetch.mockResolvedValue(
-      mockResponse(200, { action_id: "act-1", action_type: "test", status: "active" }),
+      mockResponse(200, { action_uuid: "act-1", action_type: "test", status: "active" }),
     );
     const result = await aira.getAction("act-1");
-    expect(result.action_id).toBe("act-1");
+    expect(result.action_uuid).toBe("act-1");
   });
 
   it("listActions with filters", async () => {
-    mockFetch.mockResolvedValue(paginatedResponse([{ action_id: "a1" }], 5));
+    mockFetch.mockResolvedValue(paginatedResponse([{ action_uuid: "a1" }], 5));
     const result = await aira.listActions({ page: 1, actionType: "email_sent" });
     expect(result.total).toBe(5);
     expect(result.data.length).toBe(1);
@@ -448,7 +448,7 @@ describe("actions", () => {
 
   it("getActionChain", async () => {
     mockFetch.mockResolvedValue(
-      mockResponse(200, { chain: [{ action_id: "a1" }, { action_id: "a2" }] }),
+      mockResponse(200, { chain: [{ action_uuid: "a1" }, { action_uuid: "a2" }] }),
     );
     const chain = await aira.getActionChain("act-1");
     expect(chain.length).toBe(2);
@@ -459,7 +459,7 @@ describe("actions", () => {
       mockResponse(200, {
         valid: true,
         message: "OK",
-        receipt_id: "r1",
+        receipt_uuid: "r1",
         verified_at: "d",
         public_key_id: "k1",
       }),
@@ -537,7 +537,7 @@ describe("agents", () => {
     mockFetch.mockResolvedValue(mockResponse(200, { ok: true }));
     await aira.transferAgent("test", "org-2", "M&A");
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.to_org_id).toBe("org-2");
+    expect(body.to_org_uuid).toBe("org-2");
   });
 });
 
@@ -696,7 +696,7 @@ describe("auth headers", () => {
       mockResponse(200, {
         valid: true,
         message: "OK",
-        receipt_id: null,
+        receipt_uuid: null,
         verified_at: "d",
         public_key_id: "k",
       }),
@@ -777,7 +777,7 @@ describe("verifiable credentials", () => {
 describe("mutual notarization", () => {
   it("requestMutualSign", async () => {
     mockFetch.mockResolvedValue(
-      mockResponse(200, { status: "pending", action_id: "act-1" }),
+      mockResponse(200, { status: "pending", action_uuid: "act-1" }),
     );
     const result = await aira.requestMutualSign("act-1", "did:web:example.com:agents:other");
     expect(result.status).toBe("pending");
