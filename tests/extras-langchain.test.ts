@@ -3,7 +3,7 @@ import { AiraCallbackHandler } from "../src/extras/langchain";
 import { AiraError } from "../src/types";
 
 const mockAuthorize = vi.fn();
-const mockNotarize = vi.fn().mockResolvedValue({ action_id: "a1", status: "notarized" });
+const mockNotarize = vi.fn().mockResolvedValue({ action_uuid: "a1", status: "notarized" });
 const mockResolveDid = vi.fn().mockResolvedValue({ did: "did:web:airaproof.com:agents:partner" });
 const mockGetAgentCredential = vi.fn().mockResolvedValue({ type: "VerifiableCredential" });
 const mockVerifyCredential = vi.fn().mockResolvedValue({ valid: true });
@@ -19,7 +19,7 @@ const mockClient = {
 
 beforeEach(() => {
   mockAuthorize.mockReset();
-  mockAuthorize.mockResolvedValue({ action_id: "a1", status: "authorized" });
+  mockAuthorize.mockResolvedValue({ action_uuid: "a1", status: "authorized" });
   mockNotarize.mockClear();
   mockResolveDid.mockClear();
   mockGetAgentCredential.mockClear();
@@ -39,7 +39,7 @@ describe("AiraCallbackHandler — pre-execution gate", () => {
     expect(call.details).toContain("search");
   });
 
-  it("notarizes on handleToolEnd with the cached action_id", async () => {
+  it("notarizes on handleToolEnd with the cached action_uuid", async () => {
     const handler = new AiraCallbackHandler(mockClient, "agent-1");
     await handler.handleToolStart({ name: "search" }, "q", "run-42");
     await handler.handleToolEnd("result output", "run-42", "search");
@@ -62,7 +62,7 @@ describe("AiraCallbackHandler — pre-execution gate", () => {
   });
 
   it("blocks execution on pending_approval", async () => {
-    mockAuthorize.mockResolvedValueOnce({ action_id: "a2", status: "pending_approval" });
+    mockAuthorize.mockResolvedValueOnce({ action_uuid: "a2", status: "pending_approval" });
     const handler = new AiraCallbackHandler(mockClient, "agent-1");
 
     await expect(

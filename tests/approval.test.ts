@@ -27,7 +27,7 @@ describe("authorize() with requireApproval", () => {
   it("sends requireApproval in request body", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
-        action_id: "act-1",
+        action_uuid: "act-1",
         status: "pending_approval",
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
@@ -50,7 +50,7 @@ describe("authorize() with requireApproval", () => {
   it("returns pending_approval status", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
-        action_id: "act-pending",
+        action_uuid: "act-pending",
         status: "pending_approval",
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
@@ -65,13 +65,13 @@ describe("authorize() with requireApproval", () => {
     });
 
     expect(auth.status).toBe("pending_approval");
-    expect(auth.action_id).toBe("act-pending");
+    expect(auth.action_uuid).toBe("act-pending");
   });
 
   it("omits requireApproval when false/unset", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
-        action_id: "act-1",
+        action_uuid: "act-1",
         status: "authorized",
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
@@ -89,7 +89,7 @@ describe("authorize() with requireApproval", () => {
   it("sends multiple approvers", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
-        action_id: "act-1",
+        action_uuid: "act-1",
         status: "pending_approval",
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",
@@ -111,7 +111,7 @@ describe("authorize() with requireApproval", () => {
   it("combines requireApproval with other metadata", async () => {
     mockFetch.mockResolvedValue(
       mockResponse(201, {
-        action_id: "act-1",
+        action_uuid: "act-1",
         status: "pending_approval",
         created_at: "2026-04-01T00:00:00Z",
         request_id: "req-1",

@@ -16,7 +16,7 @@
  * This handler implements the two-step flow as follows:
  *
  *   1. handleToolStart  → aira.authorize()
- *       - If the backend returns "authorized" we cache the action_id
+ *       - If the backend returns "authorized" we cache the action_uuid
  *         keyed by LangChain's `runId`, then return so the tool executes.
  *       - If the backend throws POLICY_DENIED we propagate the error,
  *         which prevents the tool from running at all (real gate).
@@ -59,7 +59,7 @@ export class AiraCallbackHandler {
   private actionTypes: Record<string, string>;
   private trustPolicy?: TrustPolicy;
   private strict: boolean;
-  /** runId → action_id cache so handleEnd can notarize the right action. */
+  /** runId → action_uuid cache so handleEnd can notarize the right action. */
   private inFlight: Map<string, string> = new Map();
 
   constructor(
@@ -102,12 +102,12 @@ export class AiraCallbackHandler {
       if (auth.status === "pending_approval") {
         // Real gate — block the tool from running until a human approves.
         const err = new Error(
-          `Aira: action '${actionType}' is pending human approval (action_id=${auth.action_id}). Tool execution blocked.`,
+          `Aira: action '${actionType}' is pending human approval (action_uuid=${auth.action_uuid}). Tool execution blocked.`,
         );
         (err as Error & { code?: string }).code = "PENDING_APPROVAL";
         throw err;
       }
-      this.inFlight.set(runId, auth.action_id);
+      this.inFlight.set(runId, auth.action_uuid);
     } catch (e) {
       const err = e as Error & { code?: string };
       // Always propagate authorization-layer rejections.

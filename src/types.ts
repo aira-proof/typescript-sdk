@@ -14,12 +14,12 @@ export const FRAMEWORK_ANNEX_IV = "eu_ai_act_annex_iv" as const;
  *
  * Status tells you what to do next:
  *  - "authorized"       → execute the action, then call `notarize()`
- *  - "pending_approval" → enqueue the action_id and wait for human approval
+ *  - "pending_approval" → enqueue the action_uuid and wait for human approval
  *
  * POLICY_DENIED is raised as an `AiraError` — not returned as a status.
  */
 export interface Authorization {
-  action_id: string;
+  action_uuid: string;
   status: "authorized" | "pending_approval";
   created_at: string;
   request_id: string;
@@ -33,11 +33,11 @@ export interface Authorization {
  * the receipt fields stay null — only the audit trail is recorded.
  */
 export interface ActionReceipt {
-  action_id: string;
+  action_uuid: string;
   status: "notarized" | "failed";
   created_at: string;
   request_id: string;
-  receipt_id: string | null;
+  receipt_uuid: string | null;
   payload_hash: string | null;
   signature: string | null;
   timestamp_token: string | null;
@@ -88,19 +88,19 @@ export interface OutputPolicyUpdate {
 
 /** Full action details including receipt and authorizations. */
 export interface ActionDetail {
-  action_id: string;
-  org_id: string;
+  action_uuid: string;
+  org_uuid: string;
   action_type: string;
   action_details_hash: string;
   agent_id: string | null;
   model_id: string | null;
   instruction_hash: string | null;
-  parent_action_id: string | null;
+  parent_action_uuid: string | null;
   status: string;
   legal_hold: boolean;
   created_at: string;
   receipt: {
-    receipt_id: string;
+    receipt_uuid: string;
     payload_hash: string;
     signature: string;
     public_key_id: string;
@@ -150,7 +150,7 @@ export interface EvidencePackage {
   id: string;
   title: string;
   description: string | null;
-  action_ids: string[];
+  action_uuids: string[];
   package_hash: string;
   signature: string;
   status: string;
@@ -182,7 +182,7 @@ export interface EscrowAccount {
   created_at: string;
   request_id: string;
   agent_id?: string | null;
-  counterparty_org_id?: string | null;
+  counterparty_org_uuid?: string | null;
   purpose?: string | null;
   transactions?: EscrowTransaction[];
 }
@@ -198,7 +198,7 @@ export interface EscrowTransaction {
   status: string;
   created_at: string;
   description?: string | null;
-  reference_action_id?: string | null;
+  reference_action_uuid?: string | null;
 }
 
 /**
@@ -219,8 +219,8 @@ export interface VerifyResult {
   message: string;
   verified_at: string;
   request_id: string;
-  receipt_id?: string | null;
-  action_id?: string | null;
+  receipt_uuid?: string | null;
+  action_uuid?: string | null;
   payload_hash?: string | null;
   signature?: string | null;
   public_key?: string | null;
@@ -247,8 +247,8 @@ export interface PaginatedList<T = Record<string, unknown>> {
  * (and optionally already notarized).
  */
 export interface CosignResult {
-  cosignature_id: string;
-  action_id: string;
+  cosignature_uuid: string;
+  action_uuid: string;
   cosigner_email: string;
   cosigned_at: string;
   request_id: string;
@@ -266,7 +266,7 @@ export class AiraError extends Error {
   statusCode: number;
   /** Error code string (e.g. "POLICY_DENIED", "INVALID_STATE"). */
   code: string;
-  /** Optional backend-supplied context (policy_id, action_id, etc.). */
+  /** Optional backend-supplied context (policy_uuid, action_uuid, etc.). */
   details: Record<string, unknown>;
 
   constructor(
@@ -292,10 +292,10 @@ export interface ComplianceReport {
   status: "pending" | "generating" | "ready" | "failed";
   created_at: string;
   request_id?: string;
-  org_id?: string;
+  org_uuid?: string;
   period_start?: string | null;
   period_end?: string | null;
-  action_id?: string | null;
+  action_uuid?: string | null;
   agent_filter?: string[] | null;
   receipt_count?: number | null;
   pdf_size_bytes?: number | null;
@@ -318,7 +318,7 @@ export interface ComplianceReportListResponse {
 }
 
 export interface ComplianceReportVerification {
-  report_id: string;
+  report_uuid: string;
   valid: boolean;
   checks: Record<string, unknown>;
   descriptor?: Record<string, unknown> | null;

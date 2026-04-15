@@ -95,7 +95,7 @@ async function main() {
     modelId: MODEL_ID,
     idempotencyKey: `loan-maria-ts-${Date.now()}`,
   });
-  console.log(`   ✓ Authorized: ${auth.action_id.slice(0, 16)}...  (${auth.status})`);
+  console.log(`   ✓ Authorized: ${auth.action_uuid.slice(0, 16)}...  (${auth.status})`);
 
   if (auth.status !== "authorized") {
     console.log("   ⚠ Action is pending human approval — skipping execution.");
@@ -106,13 +106,13 @@ async function main() {
 
   // Step 2 — notarize the outcome. Returns the Ed25519-signed receipt.
   const receipt = await aira.notarize({
-    actionId: auth.action_id,
+    actionId: auth.action_uuid,
     outcome: "completed",
     outcomeDetails: "Loan approved and booked in core system",
   });
-  console.log(`   ✓ Notarized: ${receipt.action_id.slice(0, 16)}...`);
+  console.log(`   ✓ Notarized: ${receipt.action_uuid.slice(0, 16)}...`);
   console.log(`   ✓ Signature: ${(receipt.signature ?? "").slice(0, 30)}...`);
-  const actionIds = [receipt.action_id];
+  const actionIds = [receipt.action_uuid];
 
   // Chain of custody — each follow-up action references its parent.
   const emailAuth = await aira.authorize({
@@ -120,20 +120,20 @@ async function main() {
     details: JSON.stringify({ to: "maria@example.de", subject: "Loan Approved" }),
     agentId: AGENT_SLUG,
     modelId: MODEL_ID,
-    parentActionId: auth.action_id,
+    parentActionId: auth.action_uuid,
   });
   const emailReceipt = await aira.notarize({
-    actionId: emailAuth.action_id,
+    actionId: emailAuth.action_uuid,
     outcome: "completed",
     outcomeDetails: "Email delivered (message_id=abc123)",
   });
-  console.log(`   ✓ Chained: ${emailReceipt.action_id.slice(0, 16)}...`);
-  actionIds.push(emailReceipt.action_id);
+  console.log(`   ✓ Chained: ${emailReceipt.action_uuid.slice(0, 16)}...`);
+  actionIds.push(emailReceipt.action_uuid);
 
-  const action = await aira.getAction(receipt.action_id);
+  const action = await aira.getAction(receipt.action_uuid);
   console.log(`   ✓ Type: ${action.action_type}`);
 
-  const chain = await aira.getActionChain(receipt.action_id);
+  const chain = await aira.getActionChain(receipt.action_uuid);
   console.log(`   ✓ Chain: ${chain.length} action(s)`);
 
   const actions = await aira.listActions({ actionType: "loan_decision" });
@@ -260,7 +260,7 @@ async function main() {
 
   console.log("8. Public Verification");
   console.log("-".repeat(40));
-  const verify = await aira.verifyAction(receipt.action_id);
+  const verify = await aira.verifyAction(receipt.action_uuid);
   console.log(`   ✓ Valid: ${verify.valid}`);
   console.log(`   ✓ Key: ${verify.public_key_id}`);
   console.log(`   ✓ ${verify.message.slice(0, 60)}...`);

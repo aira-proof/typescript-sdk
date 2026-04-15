@@ -178,7 +178,7 @@ export class Aira {
    *
    * Returns an `Authorization` with a status:
    *  - "authorized"       → safe to execute the action, then call `notarize()`
-   *  - "pending_approval" → enqueue `action_id` and wait for human approval
+   *  - "pending_approval" → enqueue `action_uuid` and wait for human approval
    *
    * If a policy denies the action, this throws `AiraError` with code
    * `POLICY_DENIED` (HTTP 403). Duplicate idempotent requests throw
@@ -214,7 +214,7 @@ export class Aira {
       instruction_hash: params.instructionHash,
       model_id: params.modelId,
       model_version: params.modelVersion,
-      parent_action_id: params.parentActionId,
+      parent_action_uuid: params.parentActionId,
       endpoint_url: params.endpointUrl,
       store_details: params.storeDetails || undefined,
       idempotency_key: params.idempotencyKey,
@@ -337,7 +337,7 @@ export class Aira {
   }
 
   async transferAgent(slug: string, toOrgId: string, reason?: string): Promise<Record<string, unknown>> {
-    return this.post(`/agents/${slug}/transfer`, buildBody({ to_org_id: toOrgId, reason }));
+    return this.post(`/agents/${slug}/transfer`, buildBody({ to_org_uuid: toOrgId, reason }));
   }
 
   async getAgentActions(slug: string, page = 1): Promise<PaginatedList> {
@@ -378,7 +378,7 @@ export class Aira {
     title: string; actionIds: string[]; description?: string; agentSlugs?: string[];
   }): Promise<EvidencePackage> {
     return this.post<EvidencePackage>("/evidence/packages", buildBody({
-      title: params.title, action_ids: params.actionIds, description: params.description, agent_slugs: params.agentSlugs,
+      title: params.title, action_uuids: params.actionIds, description: params.description, agent_slugs: params.agentSlugs,
     }));
   }
 
@@ -446,7 +446,7 @@ export class Aira {
   async createEscrowAccount(params?: { purpose?: string; currency?: string; agentId?: string; counterpartyOrgId?: string }): Promise<EscrowAccount> {
     return this.post<EscrowAccount>("/escrow/accounts", buildBody({
       purpose: params?.purpose, currency: params?.currency ?? "EUR",
-      agent_id: params?.agentId, counterparty_org_id: params?.counterpartyOrgId,
+      agent_id: params?.agentId, counterparty_org_uuid: params?.counterpartyOrgId,
     }));
   }
 
@@ -461,19 +461,19 @@ export class Aira {
 
   async escrowDeposit(accountId: string, amount: number, description?: string, referenceActionId?: string): Promise<EscrowTransaction> {
     return this.post<EscrowTransaction>(`/escrow/accounts/${accountId}/deposit`, buildBody({
-      amount, description, reference_action_id: referenceActionId,
+      amount, description, reference_action_uuid: referenceActionId,
     }));
   }
 
   async escrowRelease(accountId: string, amount: number, description?: string, referenceActionId?: string): Promise<EscrowTransaction> {
     return this.post<EscrowTransaction>(`/escrow/accounts/${accountId}/release`, buildBody({
-      amount, description, reference_action_id: referenceActionId,
+      amount, description, reference_action_uuid: referenceActionId,
     }));
   }
 
   async escrowDispute(accountId: string, amount: number, description: string, referenceActionId?: string): Promise<EscrowTransaction> {
     return this.post<EscrowTransaction>(`/escrow/accounts/${accountId}/dispute`, buildBody({
-      amount, description, reference_action_id: referenceActionId,
+      amount, description, reference_action_uuid: referenceActionId,
     }));
   }
 
@@ -564,7 +564,7 @@ export class Aira {
   /** Submit a signed attestation of a successful interaction. */
   async attestReputation(slug: string, counterpartyDid: string, actionId: string, attestation: string, signature: string): Promise<Record<string, unknown>> {
     return this.post(`/agents/${slug}/reputation/attest`, {
-      counterparty_did: counterpartyDid, action_id: actionId, attestation, signature,
+      counterparty_did: counterpartyDid, action_uuid: actionId, attestation, signature,
     });
   }
 
@@ -764,7 +764,7 @@ export class Aira {
       framework: params.framework,
       period_start: params.periodStart,
       period_end: params.periodEnd,
-      action_id: params.actionId,
+      action_uuid: params.actionId,
       agent_filter: params.agentFilter,
     });
     return this.post<ComplianceReport>("/compliance/reports", body);

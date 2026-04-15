@@ -109,7 +109,7 @@ describe("ActionReceipt output_scan_flags", () => {
     mockFetch
       .mockResolvedValueOnce(
         mockJsonResponse(201, {
-          action_id: "act-1",
+          action_uuid: "act-1",
           status: "authorized",
           created_at: "2026-04-15T00:00:00Z",
           request_id: "req-auth",
@@ -118,11 +118,11 @@ describe("ActionReceipt output_scan_flags", () => {
       )
       .mockResolvedValueOnce(
         mockJsonResponse(200, {
-          action_id: "act-1",
+          action_uuid: "act-1",
           status: "notarized",
           created_at: "2026-04-15T00:00:00Z",
           request_id: "req-not",
-          receipt_id: "rec-1",
+          receipt_uuid: "rec-1",
           payload_hash: "sha256:abc",
           signature: "ed25519:sig",
           timestamp_token: "tsa",

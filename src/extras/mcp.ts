@@ -51,7 +51,7 @@ export function getTools(): MCPTool[] {
     {
       name: "authorize_action",
       description:
-        "Step 1 of the Aira two-step flow. Authorize an action BEFORE it executes. Returns an action_id with status 'authorized' or 'pending_approval'. Throws POLICY_DENIED if a policy blocks the action.",
+        "Step 1 of the Aira two-step flow. Authorize an action BEFORE it executes. Returns an action_uuid with status 'authorized' or 'pending_approval'. Throws POLICY_DENIED if a policy blocks the action.",
       inputSchema: {
         type: "object",
         properties: {
@@ -72,11 +72,11 @@ export function getTools(): MCPTool[] {
       inputSchema: {
         type: "object",
         properties: {
-          action_id: { type: "string", description: "action_id returned from authorize_action" },
+          action_uuid: { type: "string", description: "action_uuid returned from authorize_action" },
           outcome: { type: "string", enum: ["completed", "failed"], description: "Did the action succeed?" },
           outcome_details: { type: "string", description: "Optional description of the outcome" },
         },
-        required: ["action_id"],
+        required: ["action_uuid"],
       },
     },
     {
@@ -85,9 +85,9 @@ export function getTools(): MCPTool[] {
       inputSchema: {
         type: "object",
         properties: {
-          action_id: { type: "string", description: "Action UUID" },
+          action_uuid: { type: "string", description: "Action UUID" },
         },
-        required: ["action_id"],
+        required: ["action_uuid"],
       },
     },
     {
@@ -96,9 +96,9 @@ export function getTools(): MCPTool[] {
       inputSchema: {
         type: "object",
         properties: {
-          action_id: { type: "string", description: "Action UUID" },
+          action_uuid: { type: "string", description: "Action UUID" },
         },
-        required: ["action_id"],
+        required: ["action_uuid"],
       },
     },
     {
@@ -107,9 +107,9 @@ export function getTools(): MCPTool[] {
       inputSchema: {
         type: "object",
         properties: {
-          receipt_id: { type: "string", description: "Receipt UUID" },
+          receipt_uuid: { type: "string", description: "Receipt UUID" },
         },
-        required: ["receipt_id"],
+        required: ["receipt_uuid"],
       },
     },
     {
@@ -151,10 +151,10 @@ export function getTools(): MCPTool[] {
       inputSchema: {
         type: "object",
         properties: {
-          action_id: { type: "string", description: "Action UUID to co-sign" },
+          action_uuid: { type: "string", description: "Action UUID to co-sign" },
           counterparty_did: { type: "string", description: "DID of the counterparty agent" },
         },
-        required: ["action_id", "counterparty_did"],
+        required: ["action_uuid", "counterparty_did"],
       },
     },
   ];
@@ -181,7 +181,7 @@ export async function handleToolCall(
 
     if (name === "notarize_action") {
       const result = await client.notarize({
-        actionId: args.action_id as string,
+        actionId: args.action_uuid as string,
         outcome: (args.outcome as "completed" | "failed" | undefined) ?? "completed",
         outcomeDetails: args.outcome_details as string | undefined,
       });
@@ -189,17 +189,17 @@ export async function handleToolCall(
     }
 
     if (name === "get_action") {
-      const result = await client.getAction(args.action_id as string);
+      const result = await client.getAction(args.action_uuid as string);
       return [{ type: "text", text: JSON.stringify(result) }];
     }
 
     if (name === "verify_action") {
-      const result = await client.verifyAction(args.action_id as string);
+      const result = await client.verifyAction(args.action_uuid as string);
       return [{ type: "text", text: JSON.stringify(result) }];
     }
 
     if (name === "get_receipt") {
-      const result = await client.getReceipt(args.receipt_id as string);
+      const result = await client.getReceipt(args.receipt_uuid as string);
       return [{ type: "text", text: JSON.stringify(result) }];
     }
 
@@ -221,7 +221,7 @@ export async function handleToolCall(
 
     if (name === "request_mutual_sign") {
       const result = await client.requestMutualSign(
-        args.action_id as string,
+        args.action_uuid as string,
         args.counterparty_did as string,
       );
       return [{ type: "text", text: JSON.stringify(result) }];

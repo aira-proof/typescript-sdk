@@ -54,7 +54,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
   switch (event.eventType) {
     case WebhookEventType.ACTION_NOTARIZED: {
       const data = event.data;
-      console.log(`  -> Action notarized: ${data.action_id}`);
+      console.log(`  -> Action notarized: ${data.action_uuid}`);
       console.log(`     Type: ${data.action_type}, Agent: ${data.agent_id}`);
       break;
     }
@@ -75,7 +75,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
 
     case WebhookEventType.EVIDENCE_SEALED: {
       const data = event.data;
-      console.log(`  -> Evidence sealed: ${data.package_id}`);
+      console.log(`  -> Evidence sealed: ${data.package_uuid}`);
       console.log(`     Title: ${data.title}`);
       break;
     }

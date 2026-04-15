@@ -2,7 +2,7 @@
  * AiraSession — scoped session with pre-filled defaults for `authorize()`.
  *
  * Under the two-step flow, only `authorize()` takes agent/model metadata;
- * `notarize()` operates on an existing action_id. This session therefore
+ * `notarize()` operates on an existing action_uuid. This session therefore
  * merges defaults on `authorize()` only and provides a thin passthrough
  * for `notarize()` so callers can use a single object end-to-end.
  */

@@ -3,7 +3,7 @@ import { AiraVercelMiddleware } from "../src/extras/vercel-ai";
 import { AiraError } from "../src/types";
 
 const mockAuthorize = vi.fn();
-const mockNotarize = vi.fn().mockResolvedValue({ action_id: "a1", status: "notarized" });
+const mockNotarize = vi.fn().mockResolvedValue({ action_uuid: "a1", status: "notarized" });
 const mockResolveDid = vi.fn().mockResolvedValue({ did: "did:web:airaproof.com:agents:partner" });
 const mockGetAgentCredential = vi.fn().mockResolvedValue({ type: "VerifiableCredential" });
 const mockVerifyCredential = vi.fn().mockResolvedValue({ valid: true });
@@ -19,7 +19,7 @@ const mockClient = {
 
 beforeEach(() => {
   mockAuthorize.mockReset();
-  mockAuthorize.mockResolvedValue({ action_id: "a1", status: "authorized" });
+  mockAuthorize.mockResolvedValue({ action_uuid: "a1", status: "authorized" });
   mockNotarize.mockClear();
   mockResolveDid.mockClear();
   mockGetAgentCredential.mockClear();
@@ -45,7 +45,7 @@ describe("AiraVercelMiddleware — wrapTool (real gate)", () => {
   });
 
   it("blocks tool execution on pending_approval", async () => {
-    mockAuthorize.mockResolvedValueOnce({ action_id: "a2", status: "pending_approval" });
+    mockAuthorize.mockResolvedValueOnce({ action_uuid: "a2", status: "pending_approval" });
     const mw = new AiraVercelMiddleware(mockClient, "agent-1");
 
     const original = vi.fn().mockResolvedValue("should not run");
