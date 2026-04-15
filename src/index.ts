@@ -31,4 +31,7 @@ export {
   type OutputPolicyUpdate,
   type OutputScanFlags,
   type OutputScanHit,
+  type DoraIncident,
+  type IctThirdParty,
+  type DoraTest,
 } from "./types";

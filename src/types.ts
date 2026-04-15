@@ -78,6 +78,65 @@ export interface OutputPolicy {
   request_id: string;
 }
 
+export interface DoraIncident {
+  uuid: string;
+  title: string;
+  status: "detected" | "classified" | "resolved" | "reported";
+  severity: "critical" | "high" | "medium" | "low" | null;
+  category: string | null;
+  is_major: boolean;
+  detected_at: string;
+  classified_at: string | null;
+  resolved_at: string | null;
+  reported_at: string | null;
+  clients_affected_count: number;
+  has_report: boolean;
+  created_at: string;
+  org_uuid?: string | null;
+  description?: string | null;
+  affected_services?: string[] | null;
+  geographic_scope?: string[] | null;
+  root_cause_summary?: string | null;
+  root_cause_classification?: string | null;
+  third_party_uuid?: string | null;
+  resolution_summary?: string | null;
+  lessons_learned?: string | null;
+  related_action_uuids?: string[] | null;
+  report_content_hash?: string | null;
+  report_signature?: string | null;
+  report_signing_key_id?: string | null;
+  report_signed_at?: string | null;
+  report_pdf_size_bytes?: number | null;
+  request_id?: string;
+}
+
+export interface IctThirdParty {
+  uuid: string;
+  org_uuid: string;
+  vendor_name: string;
+  service_description: string;
+  service_type: string;
+  criticality: "critical" | "non_critical" | "supporting";
+  contract_start_date: string | null;
+  contract_end_date: string | null;
+  exit_strategy_summary: string | null;
+  subcontractors: string[] | null;
+  data_categories: string[] | null;
+  jurisdiction: string | null;
+  is_active: boolean;
+  created_at: string;
+  request_id?: string;
+}
+
+export interface DoraTest {
+  uuid: string;
+  test_type: string;
+  title: string;
+  conducted_at: string;
+  conducted_by: string;
+  status: "passed" | "failed" | "partial";
+}
+
 export interface OutputPolicyUpdate {
   enabled?: boolean;
   mode?: "flag" | "deny" | "redact";
