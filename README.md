@@ -1,23 +1,85 @@
 # Aira TypeScript SDK
 
+[![npm version](https://img.shields.io/npm/v/aira-sdk.svg)](https://www.npmjs.com/package/aira-sdk)
+[![License: MIT](https://img.shields.io/npm/l/aira-sdk)](LICENSE)
+[![Node](https://img.shields.io/node/v/aira-sdk)](package.json)
+
 The authorization and audit layer for AI agents. Every action authorized before it runs, every outcome signed with Ed25519.
 
-[![npm](https://img.shields.io/npm/v/aira-sdk)](https://www.npmjs.com/package/aira-sdk)
-[![License](https://img.shields.io/npm/l/aira-sdk)](LICENSE)
+## Table of contents
 
-## Install
+- [Installation](#installation)
+- [Quick start](#quick-start)
+- [Core methods](#core-methods)
+- [Gateway](#gateway)
+- [Framework integrations](#framework-integrations)
+  - [LangChain.js](#langchainjs)
+  - [Vercel AI SDK](#vercel-ai-sdk)
+  - [OpenAI Agents SDK](#openai-agents-sdk)
+  - [MCP](#mcp)
+- [Content scanning](#content-scanning)
+- [Compliance & DORA](#compliance--dora)
+- [Self-hosted](#self-hosted)
+- [Links](#links)
 
-```bash
+## Installation
+
+```sh
 npm install aira-sdk
 ```
 
----
+## Quick start
 
-## Quick start (two options)
+```typescript
+import { Aira, AiraError } from "aira-sdk";
 
-### Option A: Gateway (zero code change)
+const aira = new Aira({ apiKey: "aira_live_xxx" });
 
-Route your existing OpenAI or Anthropic calls through Aira's gateway. Every request is authorized and logged -- no SDK integration needed.
+// 1. Authorize before the action runs
+const auth = await aira.authorize({
+  actionType: "wire_transfer",
+  details: "Send EUR 75K to vendor X",
+  agentId: "payments-agent",
+});
+
+// 2. Execute your business logic
+const result = await sendWire(75_000, "vendor");
+
+// 3. Notarize the outcome -- returns an Ed25519-signed receipt
+const receipt = await aira.notarize({
+  actionId: auth.action_id,
+  outcome: "completed",
+  outcomeDetails: `Sent. ref=${result.id}`,
+});
+```
+
+If the policy denies the action, `authorize()` throws an `AiraError` with code `POLICY_DENIED`. Actions requiring human approval return `status: "pending_approval"` -- listen for the webhook or poll `getAction()`.
+
+## Core methods
+
+| Method | Description |
+| --- | --- |
+| `authorize()` | Gate an action **before** it runs |
+| `notarize()` | Sign the outcome **after** execution (Ed25519 + RFC 3161) |
+| `verifyAction()` | Verify a receipt -- no auth required |
+| `getAction()` / `listActions()` | Retrieve action details and history |
+| `cosign()` | Human co-signature on high-stakes actions |
+| `registerAgent()` / `getAgent()` | Verifiable agent identity (W3C DID) |
+| `createComplianceBundle()` | Regulator-ready evidence for a date range |
+| `computeDriftBaseline()` / `runDriftCheck()` | Behavioral drift detection (KL divergence) |
+| `createSettlement()` | Merkle-anchor a batch of receipts |
+| `runCase()` | Multi-model consensus adjudication |
+| `ask()` | Query your notarized data via AI |
+| `createComplianceReport()` | Generate a compliance report (EU AI Act, ISO 42001, SOC 2) |
+| `createDoraIncident()` | Report a DORA ICT incident |
+| `getOutputPolicy()` / `updateOutputPolicy()` | Content-scan policy for notarized outputs |
+| `getActionExplanation()` | Human-readable explanation of an action decision |
+
+60+ methods total. See the [API reference](https://docs.airaproof.com/docs/api-reference) for the full list.
+
+## Gateway
+
+Route existing LLM calls through Aira with zero code changes. Every request is authorized and logged automatically.
 
 ```typescript
 import OpenAI from "openai";
@@ -27,110 +89,29 @@ const client = new OpenAI({
   ...gatewayOpenAIConfig({ airaApiKey: "aira_live_..." }),
   apiKey: "sk-...",
 });
-// Use `client` exactly as before -- Aira gates every call.
+// Use `client` exactly as before -- Aira gates every call
 ```
 
-### Option B: SDK integration
-
-Call `authorize()` before the action runs, `notarize()` after. Denied actions never execute.
-
-```typescript
-import { Aira, AiraError } from "aira-sdk";
-
-const aira = new Aira({ apiKey: "aira_live_xxx" });
-
-try {
-  const auth = await aira.authorize({
-    actionType: "wire_transfer",
-    details: "Send EUR 75K to vendor X",
-    agentId: "payments-agent",
-  });
-
-  if (auth.status === "authorized") {
-    const result = await sendWire(75_000, "vendor");
-    await aira.notarize({
-      actionId: auth.action_id,
-      outcome: "completed",
-      outcomeDetails: `Sent. ref=${result.id}`,
-    });
-  } else if (auth.status === "pending_approval") {
-    await queue.enqueue(auth.action_id); // wait for webhook
-  }
-} catch (e) {
-  if (e instanceof AiraError && e.code === "POLICY_DENIED") {
-    console.log(`Blocked: ${e.message}`);
-  } else {
-    throw e;
-  }
-}
-```
-
-The returned `ActionReceipt` carries the Ed25519 signature and RFC 3161 timestamp token.
-
----
-
-## Gateway helpers
-
-Route LLM traffic through Aira without touching your agent code. Available from `"aira-sdk/gateway"` or `"aira-sdk"`.
+Works with OpenAI, Azure OpenAI, and Anthropic:
 
 | Helper | Provider |
-|---|---|
+| --- | --- |
 | `gatewayOpenAIConfig()` | OpenAI, Azure OpenAI, any OpenAI-compatible API |
 | `gatewayAnthropicConfig()` | Anthropic |
 
-```typescript
-import Anthropic from "@anthropic-ai/sdk";
-import { gatewayAnthropicConfig } from "aira-sdk/gateway";
-
-const client = new Anthropic({
-  ...gatewayAnthropicConfig({ airaApiKey: "aira_live_..." }),
-  apiKey: "sk-ant-...",
-});
-```
-
-Both helpers accept an optional `gatewayUrl` for self-hosted deployments.
-
----
-
-## Core API
-
-Every write produces a cryptographic receipt.
-
-| Method | Description |
-|---|---|
-| `authorize()` | Gate an action BEFORE it runs. Throws `POLICY_DENIED` if denied. |
-| `notarize()` | Sign the outcome AFTER execution. Returns Ed25519-signed receipt. |
-| `verifyAction()` | Public receipt verification -- no auth required. |
-| `getAction()` / `listActions()` | Retrieve action details and history. |
-| `cosign()` | Human co-signature on high-stakes actions. |
-| `registerAgent()` / `getAgent()` | Verifiable agent identity (W3C DID). |
-| `createComplianceBundle()` | Seal regulator-ready evidence for a date range. |
-| `computeDriftBaseline()` / `runDriftCheck()` | Behavioral drift detection with KL divergence. |
-| `createSettlement()` | Merkle-anchor a batch of receipts. |
-| `runCase()` | Multi-model consensus adjudication. |
-| `ask()` | Query your notarized data via AI. |
-
-45+ methods total. See the [API reference](https://docs.airaproof.com/docs/api-reference) for the full list.
-
----
+Both helpers accept a `gatewayUrl` option for [self-hosted](#self-hosted) deployments.
 
 ## Framework integrations
 
-Drop Aira into your existing agent framework with one import. Each integration is a sub-import -- just install the peer dependency alongside `aira-sdk`.
+Each integration is a sub-import path. Install the peer dependency alongside `aira-sdk`.
 
-| Framework | Import | Type | Pre-execution gate? |
-|---|---|---|---|
-| **LangChain.js** | `aira-sdk/extras/langchain` | gate | Yes (tools) |
-| **Vercel AI SDK** | `aira-sdk/extras/vercel-ai` | gate | Yes (`wrapTool`) |
-| **OpenAI Agents** | `aira-sdk/extras/openai-agents` | gate | Yes |
-| **MCP** | `aira-sdk/extras/mcp` | adapter | N/A (agent cooperates) |
-| **Webhooks** | `aira-sdk/extras/webhooks` | adapter | N/A |
-
-```bash
-npm install aira-sdk @langchain/core  # LangChain.js
-npm install aira-sdk ai               # Vercel AI SDK
-npm install aira-sdk openai            # OpenAI Agents
-```
+| Framework | Import path | Install |
+| --- | --- | --- |
+| LangChain.js | `aira-sdk/extras/langchain` | `npm i aira-sdk @langchain/core` |
+| Vercel AI SDK | `aira-sdk/extras/vercel-ai` | `npm i aira-sdk ai` |
+| OpenAI Agents SDK | `aira-sdk/extras/openai-agents` | `npm i aira-sdk openai` |
+| MCP | `aira-sdk/extras/mcp` | `npm i aira-sdk @modelcontextprotocol/sdk` |
+| Webhooks | `aira-sdk/extras/webhooks` | `npm i aira-sdk` |
 
 ### LangChain.js
 
@@ -199,23 +180,52 @@ const search = guardrail.wrapTool(searchTool, "web_search");
 }
 ```
 
----
+## Content scanning
 
-## Features
+Aira can scan content passed to `notarize()` and block or flag policy violations. Configure the org-level policy:
 
-- **Policy engine** -- rules, AI, or multi-model consensus evaluation on every action
-- **Ed25519 signatures** -- every receipt is cryptographically signed
-- **RFC 3161 timestamps** -- tamper-proof time evidence
-- **Human approval flow** -- hold high-stakes actions for human review
-- **Compliance bundles** -- EU AI Act, ISO 42001, SOC 2 evidence packets
-- **Drift detection** -- KL divergence scoring against behavioral baselines
-- **Merkle settlement** -- periodic anchoring of receipt batches
-- **Trust layer** -- W3C DIDs, Verifiable Credentials, mutual notarization, reputation
-- **Endpoint verification** -- whitelist which external APIs your agents can call
-- **Offline mode** -- queue locally, sync when back online
-- **Sessions** -- scoped defaults for related action sequences
+```typescript
+const policy = await aira.updateOutputPolicy({
+  mode: "block",
+  categories: ["pii", "secrets", "malware"],
+});
 
----
+// If outcomeDetails triggers a scan hit, notarize() returns 422
+// with code OUTPUT_SCAN_VIOLATION
+```
+
+Retrieve the current policy at any time with `getOutputPolicy()`.
+
+## Compliance & DORA
+
+Generate regulator-ready evidence packets and manage ICT incidents under DORA:
+
+```typescript
+// Compliance bundle (EU AI Act, ISO 42001, SOC 2)
+const bundle = await aira.createComplianceBundle({
+  startDate: "2026-01-01",
+  endDate: "2026-03-31",
+  framework: "eu_ai_act",
+});
+
+// DORA incident reporting
+const incident = await aira.createDoraIncident({
+  title: "API gateway outage",
+  description: "Payment processing unavailable for 45 minutes",
+  severity: "major",
+  detectedAt: new Date().toISOString(),
+});
+
+// Compliance report with PDF download
+const report = await aira.createComplianceReport({
+  framework: "eu_ai_act",
+  startDate: "2026-01-01",
+  endDate: "2026-03-31",
+});
+const pdf = await aira.downloadComplianceReport(report.id);
+```
+
+Additional DORA methods: `classifyDoraIncident()`, `resolveDoraIncident()`, `createDoraTest()`, `createIctThirdParty()`, and more.
 
 ## Self-hosted
 
@@ -228,9 +238,14 @@ const aira = new Aira({
 });
 ```
 
-Gateway helpers also accept a `gatewayUrl` parameter for self-hosted routing.
+Gateway helpers also accept a `gatewayUrl` parameter:
 
----
+```typescript
+gatewayOpenAIConfig({
+  airaApiKey: "aira_live_...",
+  gatewayUrl: "https://aira.your-company.com/gateway",
+});
+```
 
 ## Links
 
