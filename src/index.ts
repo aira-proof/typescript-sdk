@@ -3,6 +3,7 @@ export type { AiraOptions } from "./client";
 export { AiraSession } from "./session";
 export { OfflineQueue } from "./offline";
 export type { QueuedRequest } from "./offline";
+export { gatewayOpenAIConfig, gatewayAnthropicConfig } from "./gateway";
 export {
   AiraError,
   FRAMEWORK_ANNEX_IV,
