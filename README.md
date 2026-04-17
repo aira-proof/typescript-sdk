@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/npm/l/aira-sdk)](LICENSE)
 [![Node](https://img.shields.io/node/v/aira-sdk)](package.json)
 
-The authorization and audit layer for AI agents. Every action authorized before it runs, every outcome signed with Ed25519.
+Authorize every AI agent action before it runs. Sign every outcome with Ed25519.
 
 ## Table of contents
 
