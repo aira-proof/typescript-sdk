@@ -9,6 +9,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./gateway": {
+      "types": "./dist/gateway.d.ts",
+      "default": "./dist/gateway.js"
+    },
     "./extras/langchain": {
       "types": "./dist/extras/langchain.d.ts",
       "default": "./dist/extras/langchain.js"
