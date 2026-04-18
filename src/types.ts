@@ -29,12 +29,17 @@ export interface Authorization {
 /**
  * Cryptographic receipt from notarizing an action — Step 2 of the two-step flow.
  *
- * Only populated when `status === "notarized"`. For "failed" outcomes,
- * the receipt fields stay null — only the audit trail is recorded.
+ * Status values:
+ *  - "notarized"       — action completed successfully, receipt minted
+ *  - "failed"          — action failed, Ed25519 receipt still minted for audit
+ *  - "denied"          — policy denied the action, Ed25519 receipt minted for the denial
+ *  - "denied_by_human" — human reviewer denied the action, Ed25519 receipt minted
+ *
+ * Every action state produces an Ed25519 receipt — the audit trail has zero gaps.
  */
 export interface ActionReceipt {
   action_uuid: string;
-  status: "notarized" | "failed";
+  status: "notarized" | "failed" | "denied" | "denied_by_human";
   created_at: string;
   request_id: string;
   receipt_uuid: string | null;
@@ -325,7 +330,8 @@ export class AiraError extends Error {
   statusCode: number;
   /** Error code string (e.g. "POLICY_DENIED", "INVALID_STATE"). */
   code: string;
-  /** Optional backend-supplied context (policy_uuid, action_uuid, etc.). */
+  /** Optional backend-supplied context (policy_uuid, action_uuid, receipt_uuid, etc.).
+   *  For POLICY_DENIED errors, `receipt_uuid` is the Ed25519 receipt minted for the denial. */
   details: Record<string, unknown>;
 
   constructor(

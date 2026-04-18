@@ -55,6 +55,8 @@ const receipt = await aira.notarize({
 
 If the policy denies the action, `authorize()` throws an `AiraError` with code `POLICY_DENIED`. Actions requiring human approval return `status: "pending_approval"` -- listen for the webhook or poll `getAction()`.
 
+> **Universal receipts** — Every action — authorized, denied, or failed — produces an Ed25519 receipt. The audit trail has zero gaps.
+
 ## Core methods
 
 | Method | Description |
