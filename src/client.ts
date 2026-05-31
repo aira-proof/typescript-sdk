@@ -172,6 +172,54 @@ export class Aira {
     return { data: data.data as T[], total: p.total, page: p.page, per_page: p.per_page, has_more: p.has_more };
   }
 
+  // ==================== Policies ====================
+
+  /** Create a governance policy. */
+  async createPolicy(params: {
+    name: string;
+    mode: string;
+    decision?: string;
+    priority?: number;
+    conditions?: Array<{ field: string; op: string; value: any }>;
+    aiPrompt?: string;
+    aiModels?: string[];
+    scanConfig?: Record<string, any>;
+    description?: string;
+  }): Promise<Record<string, any>> {
+    return this.post("/api/v1/policies", buildBody({
+      name: params.name,
+      mode: params.mode,
+      decision: params.decision ?? "deny",
+      priority: params.priority ?? 0,
+      conditions: params.conditions,
+      ai_prompt: params.aiPrompt,
+      ai_models: params.aiModels,
+      scan_config: params.scanConfig,
+      description: params.description,
+    }));
+  }
+
+  /** List all active policies. */
+  async listPolicies(): Promise<Array<Record<string, any>>> {
+    const data = await this.get("/api/v1/policies");
+    return (data as any).data ?? [];
+  }
+
+  /** Get a single policy by ID. */
+  async getPolicy(policyId: string): Promise<Record<string, any>> {
+    return this.get(`/api/v1/policies/${policyId}`);
+  }
+
+  /** Update a policy. Pass only fields to change. */
+  async updatePolicy(policyId: string, params: Record<string, any>): Promise<Record<string, any>> {
+    return this.put(`/api/v1/policies/${policyId}`, buildBody(params));
+  }
+
+  /** Delete a policy. */
+  async deletePolicy(policyId: string): Promise<Record<string, any>> {
+    return this.delete(`/api/v1/policies/${policyId}`);
+  }
+
   // ==================== Actions (two-step: authorize → notarize) ====================
 
   /**
