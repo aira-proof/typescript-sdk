@@ -186,7 +186,7 @@ export class Aira {
     scanConfig?: Record<string, any>;
     description?: string;
   }): Promise<Record<string, any>> {
-    return this.post("/api/v1/policies", buildBody({
+    return this.post("/policies", buildBody({
       name: params.name,
       mode: params.mode,
       decision: params.decision ?? "deny",
@@ -201,23 +201,23 @@ export class Aira {
 
   /** List all active policies. */
   async listPolicies(): Promise<Array<Record<string, any>>> {
-    const data = await this.get("/api/v1/policies");
+    const data = await this.get("/policies");
     return (data as any).data ?? [];
   }
 
   /** Get a single policy by ID. */
   async getPolicy(policyId: string): Promise<Record<string, any>> {
-    return this.get(`/api/v1/policies/${policyId}`);
+    return this.get(`/policies/${policyId}`);
   }
 
   /** Update a policy. Pass only fields to change. */
   async updatePolicy(policyId: string, params: Record<string, any>): Promise<Record<string, any>> {
-    return this.put(`/api/v1/policies/${policyId}`, buildBody(params));
+    return this.put(`/policies/${policyId}`, buildBody(params));
   }
 
   /** Delete a policy. */
   async deletePolicy(policyId: string): Promise<Record<string, any>> {
-    return this.delete(`/api/v1/policies/${policyId}`);
+    return this.delete(`/policies/${policyId}`);
   }
 
   // ==================== Actions (two-step: authorize → notarize) ====================
