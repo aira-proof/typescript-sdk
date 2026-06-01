@@ -157,6 +157,24 @@ export function getTools(): MCPTool[] {
         required: ["action_uuid", "counterparty_did"],
       },
     },
+    {
+      name: "get_pr_violations",
+      description: "Get Aira's policy violation findings for a GitHub pull request. Returns file, line, finding, description, and suggested fix for each violation.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "GitHub org or user" },
+          repo: { type: "string", description: "Repository name" },
+          pull_number: { type: "integer", description: "PR number" },
+        },
+        required: ["owner", "repo", "pull_number"],
+      },
+    },
+    {
+      name: "list_policies",
+      description: "List all active governance policies for the organization",
+      inputSchema: { type: "object", properties: {} },
+    },
   ];
 }
 
@@ -224,6 +242,20 @@ export async function handleToolCall(
         args.action_uuid as string,
         args.counterparty_did as string,
       );
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "get_pr_violations") {
+      const result = await client.getPrViolations(
+        args.owner as string,
+        args.repo as string,
+        args.pull_number as number,
+      );
+      return [{ type: "text", text: JSON.stringify(result) }];
+    }
+
+    if (name === "list_policies") {
+      const result = await client.listPolicies();
       return [{ type: "text", text: JSON.stringify(result) }];
     }
 

@@ -220,6 +220,14 @@ export class Aira {
     return this.delete(`/policies/${policyId}`);
   }
 
+  // ==================== Code Governance ====================
+
+  /** Get Aira's policy violations for a GitHub PR. */
+  async getPrViolations(owner: string, repo: string, pullNumber: number): Promise<Array<Record<string, any>>> {
+    const data = await this.get(`/webhooks/github/violations/${owner}/${repo}/${pullNumber}`);
+    return (data as any).data ?? [];
+  }
+
   // ==================== Actions (two-step: authorize → notarize) ====================
 
   /**
